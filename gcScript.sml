@@ -29,7 +29,7 @@ val TOY_EX1 = Q.prove(
 
 (* Define the gray code successor relation *)
 val GCREL_def = Define`
-  GCREL a b = ?n. (BIT n a = ~BIT n b) /\
+  GCREL a b = ?n. (BIT n a <> BIT n b) /\
                   !m. m <> n ==> (BIT m a = BIT m b)`;
 
 val bit_ss = std_ss && [BIT_def, BITS_THM]
@@ -74,7 +74,7 @@ QED
 
 Theorem GCREL_DIV2:
   !a b. GCREL a b =
-          ((ODD a = ~ODD b) /\ (a DIV 2 = b DIV 2)) \/
+          ((ODD a <> ODD b) /\ (a DIV 2 = b DIV 2)) \/
           ((ODD a = ODD b) /\ GCREL (a DIV 2) (b DIV 2))
 Proof
   rpt gen_tac >> eq_tac >| [
@@ -83,9 +83,9 @@ Proof
     rw[GCREL_def, SimpL ``(==>)``]
     >> Cases_on `n` >| [
       (* Case where bit 0 differs *)
-      DISJ1_TAC >> fs [BIT0_ODD, BIT_DIV2, ALL_BIT_EQ],
+      disj1_tac >> fs[BIT0_ODD, BIT_DIV2, ALL_BIT_EQ],
       (* Case where some other bit differs *)
-      DISJ2_TAC >> CONJ_TAC >| [
+      disj2_tac >> conj_tac >| [
         fs [GSYM BIT0_ODD, DECIDE ``0 <> SUC n'``],
         simp [GCREL_def, BIT_DIV2]
         >> qexists_tac `n'` >> rw[]
@@ -152,6 +152,10 @@ Proof
   >> metis_tac[]
 QED
 
+val XOR_ss = simpLib.SSFRAG {name = SOME"XOR",
+                             convs = [], rewrs = [], congs = [], filter = NONE,
+                             dprocs = [], ac = [(XOR_ASSOC, XOR_COMM)]}
+
 Theorem XOR_ZERO:
   !a. XOR 0 a = a
 Proof
@@ -182,6 +186,12 @@ Proof
         [EXP, GSYM BIT_DIV2, ADD1, Q.SPEC `2` MULT_COMM, DIV_MULT]
     ]
   ]
+QED
+
+Theorem TWO_EXP_MINUS_ONE_DIV2:
+  !n. (2 ** SUC n - 1) DIV 2 = 2 ** n - 1
+Proof
+  gen_tac >> irule ALL_BIT_EQ >> rw[BIT_DIV2, BIT_2EXP_MINUS1]
 QED
 
 Theorem XOR_SUC_2EXP:
@@ -226,16 +236,35 @@ Proof
     ])
 QED
 
-print_match [] ``ODD aa ==> bb``
-print_match [] ``(SUC aa) DIV xx``
-print_match [] ``aa * (xx + yy)``
+Theorem GCREL_XOR:
+  !a b. GCREL a b = (?n. XOR a b = 2 ** n)
+Proof
+  rewrite_tac [GCREL_def] >> rpt strip_tac
+  >> eq_tac >> rw[] >> qexists_tac `n`
+  >- (irule ALL_BIT_EQ >> rw[]
+      >> Cases_on `n' = n` >> fs[XOR_def])
+  >- (pop_assum (fn th =>
+       `!m. BIT m (XOR a b) = (m = n)` by rw[BIT_TWO_POW, th])
+      >> pop_assum (assume_tac o REWRITE_RULE [XOR_def])
+      >> metis_tac[])
+QED
 
-print_match [] ``ODD (SUC xx)``
-print_match [] ``ODD (SUC (2 * nn))``
-print_match [] ``SUC aa = aa + 1``
-print_match [] ``(aa * dd + cc) DIV dd``
-print_match [] ``(dd * aa) DIV dd``
+(* Rolling binary code *)
+val RBC_def = Define`RBC i = XOR i (i DIV 2)`;
 
+Theorem RBC_GCREL:
+  !i. GCREL (RBC i) (RBC (SUC i))
+Proof
+  gen_tac >> simp[GCREL_XOR, RBC_def, XOR_DIV2]
+  >> qmatch_abbrev_tac `?n. LHS = 2 ** n`
+  >> `LHS = XOR (XOR i (SUC i)) (XOR i (SUC i) DIV 2)`
+       by full_simp_tac (std_ss++XOR_ss) [XOR_DIV2]
+  >> pop_assum (fn th => rewrite_tac [th])
+  >> `?n. XOR i (SUC i) = 2 ** SUC n - 1` by rw[XOR_SUC_2EXP]
+  >> qexists_tac `n` >> rw[]
+  >> irule ALL_BIT_EQ
+  >> rw[TWO_EXP_MINUS_ONE_DIV2, XOR_def, BIT_2EXP_MINUS1]
+QED
 
 (* There is probably a better way knowing that for some n
    we have ~BIT n a and if 0 < a, then there is a n such
@@ -259,6 +288,7 @@ Proof
     ]
   ]
 QED
+
 
 (* ------------------- WORK IN PROGRESS
 
