@@ -74,8 +74,8 @@ QED
 
 Theorem GCREL_DIV2:
   !a b. GCREL a b =
-          ((ODD a <> ODD b) /\ (a DIV 2 = b DIV 2)) \/
-          ((ODD a = ODD b) /\ GCREL (a DIV 2) (b DIV 2))
+          (((ODD a <> ODD b) /\ (a DIV 2 = b DIV 2)) \/
+          ((ODD a = ODD b) /\ GCREL (a DIV 2) (b DIV 2)))
 Proof
   rpt gen_tac >> eq_tac >| [
     (* => *)
