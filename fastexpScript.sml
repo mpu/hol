@@ -1,4 +1,6 @@
-open HolKernel Tactical bossLib arithmeticTheory logrootTheory;
+open HolKernel boolLib bossLib arithmeticTheory logrootTheory;
+
+val _ = new_theory "fastexp"
 
 val FEXP_def = tDefine"FEXP"
   `FEXP b e =
@@ -34,3 +36,5 @@ Proof
       >> rw[ADD1, SimpL ``$=``]
       >> rw[EXP, SIMP_RULE arith_ss [] (Q.SPECL [`2`, `1`] DIV_MULT)])
 QED
+
+val _ = export_theory()

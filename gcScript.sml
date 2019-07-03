@@ -1,5 +1,4 @@
-open HolKernel Tactic Tactical Conv Rewrite
-     bossLib arithmeticTheory bitTheory;
+open HolKernel boolLib bossLib arithmeticTheory bitTheory;
 
 val _ = new_theory "gc";
 
