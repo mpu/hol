@@ -15,9 +15,7 @@ val FEXP_def = tDefine"FEXP"
 Theorem DIV2_INDUCTION:
   !P. P 0 /\ (!a. P (a DIV 2) ==> P a) ==> !a. P a
 Proof
-  CONV_TAC (BINDER_CONV RIGHT_IMP_FORALL_CONV
-            THENC SWAP_FORALL_CONV)
-  >> completeInduct_on `a` >> rpt strip_tac
+  rw[] >> completeInduct_on `a`
   >> `(a = 0) \/ (0 < a)` by decide_tac
   >> rw[(EVAL_RULE o Q.SPECL [`a`, `2`]) DIV_LESS]
 QED
