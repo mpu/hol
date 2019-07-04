@@ -288,34 +288,26 @@ Proof
   ]
 QED
 
-
-(* ------------------- WORK IN PROGRESS
-
-Theorem SUC_BIT:
-  !a. ?n. !m.
-       if m < n then BIT m a /\ ~BIT m (SUC a)
-  else if m = n then ~BIT m a /\ BIT m (SUC a)
-  else               BIT m a = ~BIT m (SUC a)
+Theorem XOR_LE_2EXP_LOG2:
+  !a b. b <= a ==> XOR a b < 2 ** SUC (LOG2 a)
 Proof
+  rpt strip_tac >> irule DIV_0_IMP_LT >> rw[]
+  >- (rw[EXP]
+     >> mp_tac (Q.SPEC `LOG2 a` ONE_LE_TWOEXP)
+     >> decide_tac)
+  >- (
+    irule ALL_BIT_EQ
+    >> rw[BIT_ZERO, BIT_SHIFT_THM4, XOR_def]
+    >> qmatch_abbrev_tac `BIT idx a = _`
+    >> `!c. c <= a ==> ~BIT idx c` suffices_by rw[]
+    >> rw[] >> `(c = 0) \/ 0 < c` by decide_tac
+    >- rw[BIT_ZERO]
+    >> `LOG2 a < idx` by rw[Abbr`idx`]
+    >> `LOG2 c <= LOG2 a` by rw[LOG2_LE_MONO]
+    >> MATCH_MP_TAC NOT_BIT_GT_LOG2
+    >> rw[LESS_LESS_EQ_TRANS]
+  )
 QED
-
-
-Theorem XOR_SUC_2EXP:
-  !a. ?n. XOR a (SUC a) = 2 ** n - 1
-Proof
-  gen_tac >> `(a = 0) \/ (0 < a)` by decide_tac
-  (* case 0 *) qexists_tac `1` >> full_simp_tac std_ss [XOR_ZERO]
-  (* interesting case, use the number of leading ones of a *)
-  mp_tac (Q.SPEC `a` NLO_EXISTS) >> rw[]
-  >> qexists_tac `n`
-  >> irule ALL_BIT_EQ >> rw[XOR_def]
-
-print_match [] ``BIT nn (2 ** xx)`` (* BIT_TWO_POW *)
-print_match [] ``0 < xx DIV yy ``
-
-LESS_EQ_EXISTS
-
-*)
 
 (* Experiments:
 
