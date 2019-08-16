@@ -139,6 +139,19 @@ Proof
   rw[tri_def, whl_ind_lem]
 QED
 
+Theorem hoare_wkn:
+  !PRE PST PRE' PST'.
+    (!st. PRE' st ==> PRE st) /\
+    (!st. PST st ==> PST' st) /\
+    tri PRE s PST ==>
+    tri PRE' s PST'
+Proof
+  rw[tri_def, tri_ind_def] >>
+  first_x_assum (qspec_then `st2` match_mp_tac) >>
+  first_x_assum (qspecl_then [`n`,`st1`,`st2`] match_mp_tac) >>
+  rw[]
+QED
+
 (**************** reflection datatypes and helpers ****************)
 datatype bop
   = oMUL | oPLS | oMNS | oCLE | oCEQ | oCNE
@@ -250,4 +263,49 @@ val mean_prog = ``
   -- the program ends with 6 in variables 0 and 1
 
   (print o emit_C ["i", "j"] o dest_blk) mean_prog
+  -- prints the C body in the repl
 *)
+
+(* Prove the specification of the mean function *)
+Theorem mean_prog_proof:
+  !i j.
+    tri (\st. (st 0 = i) /\ (st 1 = j))
+        ^mean_prog
+        (\st. st 0 = (j + i) DIV 2)
+Proof
+  ntac 2 strip_tac >>
+  (* the loop invariant *)
+  markerLib.ABBREV_TAC
+    ``INV = \st. (st 1 < st 0) \/
+                 ((st 1 + st 0) DIV 2 = (j + i) DIV 2)`` >>
+  match_mp_tac (Q.SPEC `INV` hoare_wkn) >>
+  Q.PAT_ABBREV_TAC `cnd = (Bop CNE _ _)` >>
+  qexists_tac `\st. INV st /\ (erun st cnd = 0)` >>
+  rpt conj_tac
+  >- rw[Abbr `INV`]
+  >- (rw[Abbr `INV`, Abbr `cnd`, erun_def] >>
+      fs[ONCE_REWRITE_RULE [MULT_COMM] (EVAL_RULE (Q.SPEC `2` MULT_DIV))])
+  >> match_mp_tac hoare_whl >>
+     rw[Abbr `INV`, Abbr `cnd`, block_def,
+        erun_def, tri_def, tri_ind_def, srun_def] >>
+     pop_assum kall_tac >>
+     EVAL_TAC >> rw[] >>
+     `st 1 = 0 \/ st 1 > 0` by decide_tac >> rw[]
+QED
+
+(* Extract the mean function in a C file *)
+val _ =
+  let
+    val mean_body = emit_C ["i", "j"] (dest_blk mean_prog)
+    val mean_fun =
+      "int mean(int i, int j)\n{\n" ^ mean_body ^ "\treturn i;\n}\n"
+    (* https://stackoverflow.com/a/33606353 *)
+    fun writeFile filename content =
+      let val fd = TextIO.openOut filename
+          val _ = TextIO.output (fd, content)
+                  handle e => (TextIO.closeOut fd; raise e)
+          val _ = TextIO.closeOut fd
+      in () end
+  in writeFile "mean.c" mean_fun end
+
+val _ = export_theory ()
