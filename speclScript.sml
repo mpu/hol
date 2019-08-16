@@ -31,6 +31,114 @@ val erun_def = Define`
     | CEQ => if erun st e1  = erun st e2 then 1 else 0
     | CNE => if erun st e1 <> erun st e2 then 1 else 0)`
 
+(* the result of a computation *)
+val res_def = Datatype`res
+  = Done (num -> num)
+  | Timeout
+  `
+
+val srun_def = Define`
+  (srun n st Nop = Done st) /\
+  (srun n st (Set v e) = Done ((v =+ erun st e) st)) /\
+  (srun n st (Seq s1 s2) =
+    case srun n st s1 of
+      Done st1 => srun n st1 s2
+    | Timeout => Timeout) /\
+  (srun (SUC n) st (Whl e s) =
+    if erun st e = 0 then
+      Done st
+    else
+      srun n st (Seq s (Whl e s))) /\
+  (srun 0 st (Whl e s) = Timeout)`
+
+(**************** Hoare program logic ****************)
+
+val tri_ind_def = Define`tri_ind n PRE s PST
+  = !st1 st2. PRE st1 /\ srun n st1 s = Done st2 ==> PST st2`
+
+val tri_def = Define`tri PRE s PST = !n. tri_ind n PRE s PST`
+
+val srun_monotonic = Q.prove(
+  `!n1 s st1 n2 st2.
+     n1 < n2 /\ srun n1 st1 s = Done st2 ==>
+     srun n2 st1 s = Done st2`,
+  Induct >| [
+    (* base *)
+    Induct_on `s` >> rw[srun_def] >>
+    Cases_on `srun 0 st1 s` >> fs[] >>
+    RES_TAC >> rw[],
+    (* induction *)
+    Cases_on `n2`
+    >- fs[]
+    >> REWRITE_TAC [LESS_MONO_EQ] >>
+       Induct_on `s` >> rw[srun_def] >| [
+         (* seq *)
+         Cases_on `srun (SUC n1) st1 s` >> fs[] >>
+         RES_TAC >> rw[],
+         (* whl *)
+         Cases_on `srun n1 st1 s` >> fs[] >>
+         RES_TAC >> rw[]
+       ]
+  ]
+)
+
+val tri_ind_monotonic = Q.prove(
+  `!n1 n2 PRE s PST.
+     n1 > n2 /\ tri_ind n1 PRE s PST ==>
+     tri_ind n2 PRE s PST`,
+  rw[tri_ind_def] >>
+  first_x_assum irule >>
+  qexists_tac `st1` >> rw[] >>
+  irule srun_monotonic >>
+  qexists_tac `n2` >> rw[]
+)
+
+Theorem hoare_set:
+  !PST v e. tri (PST o \st. (v =+ erun st e) st) (Set v e) PST
+Proof
+  rw[tri_def, tri_ind_def, srun_def]
+QED
+
+Theorem hoare_seq:
+  !PRE MID PST s1 s2. tri PRE s1 MID /\ tri MID s2 PST ==>
+                      tri PRE (Seq s1 s2) PST
+Proof
+  rw[tri_def, tri_ind_def, srun_def] >>
+  Cases_on `srun n st1 s1` >> fs[] >>
+  first_x_assum irule >>
+  qexists_tac `n` >> qexists_tac `f` >> rw[] >>
+  first_x_assum irule >>
+  qexists_tac `n` >> qexists_tac `st1` >> rw[]
+QED
+
+val whl_ind_lem = Q.prove (
+  `!n INV e s.
+    tri_ind n (\st. INV st /\ (erun st e <> 0)) s INV ==>
+    tri_ind n INV (Whl e s) (\st. INV st /\ (erun st e = 0))`,
+  Induct >> rpt strip_tac
+  >- rw[tri_ind_def, srun_def]
+  >> rewrite_tac [tri_ind_def] >> rpt strip_tac >>
+     first_x_assum (assume_tac o REWRITE_RULE [srun_def]) >>
+     `(erun st1 e = 0) \/ (erun st1 e <> 0)` by decide_tac >> fs[]
+     >- rw[]
+     >> Cases_on `srun n st1 s` >> fs[] >> RES_TAC >>
+        last_x_assum (irule o SIMP_RULE pure_ss [tri_ind_def, SimpR ``$==>``]) >>
+        qexists_tac `s` >> qexists_tac `f` >> rw[] >| [
+          last_x_assum (irule o SIMP_RULE pure_ss [tri_ind_def, SimpR ``$==>``]) >>
+          qexists_tac `st1` >> rw[] >>
+          irule srun_monotonic >> qexists_tac `n` >> rw[],
+          irule tri_ind_monotonic >> qexists_tac `SUC n` >> rw[]
+        ]
+)
+
+Theorem hoare_whl:
+  !INV e s.
+    tri (\st. INV st /\ (erun st e <> 0)) s INV ==>
+    tri INV (Whl e s) (\st. INV st /\ (erun st e = 0))
+Proof
+  rw[tri_def, whl_ind_lem]
+QED
+
 (**************** reflection datatypes and helpers ****************)
 datatype bop
   = oPLS | oMNS | oCLE | oCEQ | oCNE
@@ -76,3 +184,8 @@ val mean_prog = ``
     Set 1 (Bop MNS (Var 1) (Num 1));
     Set 0 (Bop PLS (Var 0) (Num 1));
   ])``
+
+(*
+  EVAL ``srun 10 (\n. case n of 0 => 1 | 1 => 11) ^mean_prog``
+  -- the program ends with 6 in variables 0 and 1
+*)
