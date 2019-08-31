@@ -68,7 +68,7 @@ val RSEM_def = tDefine"RSEM"
    >- (first_x_assum (qspecl_then [`t`, `a`] mp_tac) >> rw[]))
 
 (* Decompile and SECD state *)
-val DEC = Define
+val DEC_def = tDefine"DEC"
   `(DEC (r :: s) e c d =
      DEC s e (TRM (RSEM r) :: c) d) /\
    (DEC [] e (TRM tu :: TRM tt :: APL :: c) d =
@@ -77,6 +77,7 @@ val DEC = Define
      DEC (CLO e' t :: s) e c d) /\
    (DEC [] e [TRM t] [] = SOME t) /\
    (DEC [] e _ _ = NONE)`
+  (cheat)
 
 (* Would like to show,
    if CBV f t = SOME t' then RUN f [] [] [TRM t] [] = v
