@@ -110,10 +110,6 @@ val EXELIM = Define`
   EXELIM l =
     OTH l ++ FLAT (MAP (\u. MAP (\l. (FST l, SND u)) (LBS l)) (UBS l))`
 
-val EVERY_LIST_TO_SET_lem = Q.prove(
-  `!P l. EVERY P l <=> !x. x IN (set l) ==> P x`,
-  rw[EVERY_MEM])
-
 (* EXELIM is a semantics-preserving transformation on formulas *)
 Theorem SEM_EXELIM:
   !e l. SEM e (EX (FLOW l)) = SEM e (EX (FLOW (EXELIM l)))
