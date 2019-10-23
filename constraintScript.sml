@@ -84,10 +84,7 @@ Theorem SEMA_NE_IDX0:
   !a. a <> IDX 0 ==> !e x1 x2. SEMA (x1::e) a = SEMA (x2::e) a
 Proof
   Cases >> rewrite_tac[SEMA] >>
-  Cases_on `n` >| [
-    rewrite_tac[],
-    rewrite_tac[EL,TL]
-  ]
+  Cases_on `n` >> rewrite_tac[EL,TL]
 QED
 
 Theorem LBS_UBS_OTH_NE_IDX0:
@@ -122,6 +119,55 @@ Proof
       prove_tac[SEMA_NE_IDX0,LBS_UBS_OTH_NE_IDX0],
       prove_tac[SEMA_NE_IDX0,LBS_UBS_OTH_NE_IDX0],
       prove_tac[SEMA_NE_IDX0,LBS_UBS_OTH_NE_IDX0]
+    ]
+  ]
+QED
+
+(* EXELIM eliminates the first DeBruijn index *)
+Theorem NE_IDX0_EXELIM:
+  !l. EVERY (\p. FST p <> IDX 0 /\ SND p <> IDX 0) (EXELIM l)
+Proof
+  rw[EXELIM,EVERY_FLAT,EVERY_MAP] >>
+  rw[EVERY_MEM] >>
+  prove_tac[LBS_UBS_OTH_NE_IDX0]
+QED
+
+(* Pop one level on DeBruijn indices *)
+val POP1A = Define`
+  (POP1A (PRP p) = PRP p) /\
+  (POP1A (IDX n) = IDX (PRE n))`
+
+(* Same on a list of flow constraints *)
+val POP1 = Define`
+  POP1 = MAP (\p. (POP1A (FST p), POP1A (SND p)))`
+
+Theorem POP1A_NE_IDX0:
+  !a. a <> IDX 0 ==> !e x. SEMA e (POP1A a) = SEMA (x::e) a
+Proof
+  Cases >> rewrite_tac[POP1A,SEMA] >>
+  Cases_on `n` >> rewrite_tac[EL,TL,prim_recTheory.PRE]
+QED
+
+Theorem SEM_POP1:
+  !l e. EVERY (\p. FST p <> IDX 0 /\ SND p <> IDX 0) l ==>
+        SEM e (EX (FLOW l)) = SEM e (FLOW (POP1 l))
+Proof
+  Induct >> rw[SEM] >| [
+    rw[EVERY_MEM,POP1],
+    rewrite_tac[POP1,MAP] >>
+    rewrite_tac[GSYM POP1,EVERY_DEF] >>
+    rewrite_tac[GSYM (repeat CONJUNCT2 SEM)] >>
+    simp_tac std_ss [] >>
+    eq_tac >> strip_tac >| [
+      `SEM e (EX (FLOW l))` by (
+        once_rewrite_tac[SEM] >>
+        qexists_tac `p` >> rw[]
+        ) >>
+      prove_tac[POP1A_NE_IDX0],
+      `SEM e (EX (FLOW l))` by rw[] >>
+      first_x_assum (STRIP_ASSUME_TAC o ONCE_REWRITE_RULE [SEM]) >>
+      qexists_tac `p` >>
+      prove_tac[POP1A_NE_IDX0]
     ]
   ]
 QED
