@@ -45,25 +45,18 @@ val LBS = Define`
   LBS l = FILTER (\p. SND p = IDX 0 /\ FST p <> IDX 0) l`
 val UBS = Define`
   UBS l = FILTER (\p. FST p = IDX 0 /\ SND p <> IDX 0) l`
-
-val SEM_MEM_lem = Q.prove(
-  `!e p l. MEM p l /\ SEM e (FLOW l) ==>
-           SEMA e (FST p) SUBSET SEMA e (SND p)`,
-  rw[SEM,EVERY_MEM])
+val OTH = Define`
+  OTH l = FILTER (\p. FST p <> IDX 0 /\ SND p <> IDX 0) l`
 
 val SEM_LBS_UBS_lem = Q.prove(
   `!e x l. (SEM (x::e) (FLOW (LBS l)) <=>
             !y. MEM y (LBS l) ==> SEMA (x::e) (FST y) SUBSET x) /\
            (SEM (x::e) (FLOW (UBS l)) <=>
             !y. MEM y (UBS l) ==> x SUBSET SEMA (x::e) (SND y))`,
-  simp_tac list_ss
-    [LBS,UBS,MEM_FILTER,SEM,EVERY_MEM,SEMA])
+  simp_tac list_ss [LBS,UBS,MEM_FILTER,SEM,EVERY_MEM,SEMA])
 
 val [SEM_LBS_lem, SEM_UBS_lem] =
   CONJUNCTS (CONV_RULE (DEPTH_CONV FORALL_AND_CONV) SEM_LBS_UBS_lem)
-
-val OTH = Define`
-  OTH l = FILTER (\p. FST p <> IDX 0 /\ SND p <> IDX 0) l`
 
 Theorem SPLIT_LBS_UBS_OTH:
   !l e. SEM e (FLOW l) <=>
