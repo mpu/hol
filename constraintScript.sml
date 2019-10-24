@@ -150,25 +150,60 @@ QED
 
 Theorem SEM_POP1:
   !l e. EVERY (\p. FST p <> IDX 0 /\ SND p <> IDX 0) l ==>
-        SEM e (EX (FLOW l)) = SEM e (FLOW (POP1 l))
+        SEM e (EX (FLOW l)) = SEM e (FLOW (POP1 l)) /\
+        SEM e (AL (FLOW l)) = SEM e (FLOW (POP1 l))
 Proof
-  Induct >> rw[SEM] >| [
-    rw[EVERY_MEM,POP1],
-    rewrite_tac[POP1,MAP] >>
-    rewrite_tac[GSYM POP1,EVERY_DEF] >>
-    rewrite_tac[GSYM (repeat CONJUNCT2 SEM)] >>
-    simp_tac std_ss [] >>
-    eq_tac >> strip_tac >| [
-      `SEM e (EX (FLOW l))` by (
-        once_rewrite_tac[SEM] >>
-        qexists_tac `p` >> rw[]
-        ) >>
-      prove_tac[POP1A_NE_IDX0],
-      `SEM e (EX (FLOW l))` by rw[] >>
-      first_x_assum (STRIP_ASSUME_TAC o ONCE_REWRITE_RULE [SEM]) >>
-      qexists_tac `p` >>
-      prove_tac[POP1A_NE_IDX0]
-    ]
+  rw[SEM,POP1,EVERY_MEM,MEM_MAP] >>
+  metis_tac[POP1A_NE_IDX0,pairTheory.FST,pairTheory.SND]
+QED
+
+(* Eliminate a universally quantified variable *)
+val ALELIM = Define`
+  ALELIM l =
+    OTH l ++ MAP (\p. (FST p, PRP {})) (LBS l)
+          ++ MAP (\p. (PRP univ(:'a), SND p)) (UBS l)`
+
+(* ALELIM is a semantics-preserving transformation on formulas *)
+Theorem SEM_ALELIM:
+  !e l. SEM e (AL (FLOW l)) = SEM e (AL (FLOW (ALELIM l)))
+Proof
+  rw[Once SEM, Once SPLIT_LBS_UBS_OTH] >>
+  rw[SEM_LBS_lem,SEM_UBS_lem] >>
+  rw[ALELIM,SEM,EVERY_MAP] >>
+  rw[EVERY_MEM] >>
+  eq_tac >> strip_tac >| [
+    rewrite_tac[SEMA] >>
+    rpt (strip_tac ORELSE conj_tac) >|
+    map (fn t => first_x_assum (qspec_then t mp_tac))
+        [`p`,`{}`,`univ(:'a)`] >>
+    prove_tac[SEMA_NE_IDX0,LBS_UBS_OTH_NE_IDX0],
+    pop_assum (assume_tac o REWRITE_RULE [SEMA]) >>
+    prove_tac[SUBSET_TRANS,EMPTY_SUBSET,SUBSET_UNIV]
+  ]
+QED
+
+(* ALELIM eliminates the first DeBruijn index *)
+Theorem NE_IDX0_ALELIM:
+  !l. EVERY (\p. FST p <> IDX 0 /\ SND p <> IDX 0) (ALELIM l)
+Proof
+  rw[ALELIM,EVERY_MAP] >>
+  rw[EVERY_MEM] >>
+  prove_tac[LBS_UBS_OTH_NE_IDX0]
+QED
+
+(* Finally, putting it together, we eliminate all quantifiers
+   from a formula *)
+val QELIM = Define`
+  (QELIM (EX c) = POP1 (EXELIM (QELIM c))) /\
+  (QELIM (AL c) = POP1 (ALELIM (QELIM c))) /\
+  (QELIM (FLOW l) = l)`
+
+Theorem SEM_QELIM:
+  !c e. SEM e c = SEM e (FLOW (QELIM c))
+Proof
+  Induct >> rw[QELIM] >| [
+    metis_tac[NE_IDX0_EXELIM,SEM_POP1,SEM_EXELIM,SEM],
+    metis_tac[NE_IDX0_ALELIM,SEM_POP1,SEM_ALELIM,SEM]
   ]
 QED
 
