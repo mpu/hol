@@ -7,7 +7,6 @@ val atom_def = Datatype`atom = IDX num | PRP ('a set)`
 val ct_def = Datatype`ct
  = EX ct
  | AL ct
- (* | CONJ ct ct  annoying at first because we need to shuffle quantifiers *)
  | FLOW (('a atom # 'a atom) list)`
 
 val SEMA = Define`
