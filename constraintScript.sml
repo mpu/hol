@@ -62,22 +62,8 @@ Theorem SPLIT_LBS_UBS_OTH:
   !l e. SEM e (FLOW l) <=>
         SEM e (FLOW (LBS l)) /\ SEM e (FLOW (UBS l)) /\ SEM e (FLOW (OTH l))
 Proof
-  Induct >| [
-    rw[LBS,UBS,OTH],
-    rpt strip_tac >>
-    `!l. SEM e (FLOW (h::l)) <=>
-         SEM e (FLOW l) /\ (SEMA e (FST h) SUBSET SEMA e (SND h))`
-      by (rw[SEM] >> prove_tac[]) >>
-    Cases_on `FST h = IDX 0` >>
-    Cases_on `SND h = IDX 0` >> 
-    (`LBS (h::l) = LBS l`    by rw[LBS] ORELSE
-     `LBS (h::l) = h::LBS l` by rw[LBS]) >>
-    (`UBS (h::l) = UBS l`    by rw[UBS] ORELSE
-     `UBS (h::l) = h::UBS l` by rw[UBS]) >>
-    (`OTH (h::l) = OTH l`    by rw[OTH] ORELSE
-     `OTH (h::l) = h::OTH l` by rw[OTH]) >>
-    rw[] >> prove_tac[]
-  ]
+  rw[SEM,LBS,UBS,OTH,EVERY_MEM,MEM_FILTER] >>
+  metis_tac[SUBSET_REFL]
 QED
 
 Theorem SEMA_NE_IDX0:
