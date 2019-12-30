@@ -32,11 +32,9 @@ Theorem FINITE_NEIGHB:
   !x G. FINITE G ==> FINITE (NEIGHB x G)
 Proof
   `!x G. NEIGHB x G = IMAGE SND (G INTER ({x} CROSS UNIV)) UNION
-                      IMAGE FST (G INTER (UNIV CROSS {x}))`
-  by (
-    rw[NEIGHB_def,INE_def,IMAGE_DEF,CROSS_DEF,INTER_DEF,UNION_DEF,EXTENSION]
-    \\ metis_tac[pairTheory.FST,pairTheory.SND,pairTheory.PAIR]
-  )
+                      IMAGE FST (G INTER (UNIV CROSS {x}))` by
+    (rw[NEIGHB_def,INE_def,IMAGE_DEF,CROSS_DEF,INTER_DEF,UNION_DEF,EXTENSION]
+     \\ metis_tac[pairTheory.FST,pairTheory.SND,pairTheory.PAIR])
   \\ rw[]
 QED
 
@@ -44,10 +42,10 @@ val DEG_def = Define`
   DEG x G = CARD (NEIGHB x G) + if (x,x) IN G then 1 else 0`
 
 val DEG_SINGLETON = Q.prove(
-  `!x y z. (x <> y /\ x <> z ==> DEG x {(y,z)} = 0) /\
-           (y <> z ==> DEG y {(y,z)} = 1 /\ DEG z {(y,z)} = 1) /\
-           (DEG y {(y,y)} = 2)`,
-    rw[DEG_def, NEIGHB_def, INE_def]);
+  `!x y z. DEG x {(y,z)} =
+             if x <> y /\ x <> z then 0 else
+             if y = z then 2 else 1`,
+    rw[DEG_def, NEIGHB_def, INE_def] \\ rpt (fs[]));
 
 val INE_IN = Q.prove(
   `!x E. (x,x) INE E <=> (x,x) IN E`,
@@ -88,27 +86,10 @@ Proof
   (* TODO: rename h to y *)
     simp[PAIRS_def, CIRCUIT_def]
     \\ ntac 4 strip_tac
-    \\ first_x_assum drule
-    \\ pop_assum kall_tac
+    \\ first_x_assum dxrule
     \\ qspecl_then [`l`,`h`,`z`] assume_tac FINITE_PAIRS 
-    \\ rw[DEG_INSERT_ADD]
-    >- (first_x_assum drule \\ rw[EVEN_ADD,DEG_SINGLETON])
-    >- rw[EVEN_ADD,DEG_INSERT_ADD,DEG_SINGLETON]
-    >- (first_x_assum drule \\ rw[EVEN_ADD,DEG_SINGLETON])
-    >- (first_x_assum drule \\ rw[ODD_ADD,EVEN_ODD,DEG_SINGLETON])
-    >- (first_x_assum drule \\ rw[ODD_ADD,GSYM EVEN_ODD,DEG_SINGLETON])
-    >- (Cases_on `y = h`
-        >- rw[DEG_SINGLETON,EVEN_ADD,EVEN_ODD]
-        >- rw[DEG_SINGLETON,EVEN_ADD])
-    >- (rw[DEG_INSERT_ADD,DEG_SINGLETON,EVEN_ADD]
-        \\ rw[EVEN_ODD])
-    >- (Cases_on `y = h`
-        >- rw[DEG_SINGLETON,EVEN_ADD,EVEN_ODD]
-        >- rw[DEG_SINGLETON,EVEN_ADD])
-    >- (Cases_on `x = h`
-        >- rw[DEG_SINGLETON,ODD_ADD]
-        >- rw[DEG_SINGLETON,ODD_ADD,GSYM EVEN_ODD])
-    >- rw[DEG_SINGLETON,ODD_ADD]
+    \\ simp[ODD_EVEN,DEG_INSERT_ADD,EVEN_ADD]
+    \\ rw[] \\ rw[DEG_SINGLETON,DEG_INSERT_ADD,EVEN_ADD] \\ rw[]
   ]
 QED
 
