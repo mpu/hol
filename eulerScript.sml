@@ -22,9 +22,9 @@ val _ = Parse.set_fixity "INE" (Parse.Infix(Parse.NONASSOC, 425))
 
 (* A circuit is a path that does not go twice by the same
    undirected edge *)
-val CIRCUIT_def = Define`
-  (CIRCUIT x [] z <=> T) /\
-  (CIRCUIT x (y::l) z <=> ~((x,y) INE PAIRS y l z) /\ CIRCUIT y l z)`
+val (_, CIRCUIT_ind, _) = Hol_reln`
+  (CIRCUIT x [] z) /\
+  (~((x,y) INE PAIRS y l z) /\ CIRCUIT y l z ==> CIRCUIT x (y::l) z)`
 
 val NEIGHB_def = Define`NEIGHB x G = {y | (x,y) INE G}`
 
@@ -33,8 +33,10 @@ Theorem FINITE_NEIGHB:
 Proof
   `!x G. NEIGHB x G = IMAGE SND (G INTER ({x} CROSS UNIV)) UNION
                       IMAGE FST (G INTER (UNIV CROSS {x}))` by
-    (rw[NEIGHB_def,INE_def,IMAGE_DEF,CROSS_DEF,INTER_DEF,UNION_DEF,EXTENSION]
-     \\ metis_tac[pairTheory.FST,pairTheory.SND,pairTheory.PAIR])
+    let open pairTheory in
+      rw[NEIGHB_def,INE_def,EXTENSION]
+      \\ metis_tac[PAIR,FST,SND]
+    end
   \\ rw[]
 QED
 
@@ -61,34 +63,33 @@ val DEG_INSERT_ADD = Q.prove(
     simp[DEG_def]
     \\ rpt strip_tac
     \\ qmatch_abbrev_tac `CARD S0 + _ = CARD S1 + (CARD S2 + _)`
-    \\ `S0 = S2 UNION S1`
-    by rw[Abbr`S0`,Abbr`S1`,Abbr`S2`,NEIGHB_def,Once INE_INSERT,UNION_DEF]
+    \\ `S0 = S2 UNION S1` by
+         (unabbrev_all_tac \\ rw[NEIGHB_def,Once INE_INSERT,UNION_DEF])
     \\ pop_assum (fn eq => rewrite_tac [eq])
     \\ `FINITE S1` by rw[Abbr`S1`,FINITE_NEIGHB]
     \\ `FINITE S2` by rw[Abbr`S2`,FINITE_NEIGHB]
-    \\ `CARD (S2 INTER S1) = 0`
-    by (rw[Abbr`S1`,Abbr`S2`,EXTENSION,NEIGHB_def]
-        \\ fs[INE_def] \\ metis_tac[])
+    \\ `CARD (S2 INTER S1) = 0` by
+         (rw[Abbr`S1`,Abbr`S2`,EXTENSION,NEIGHB_def]
+          \\ fs[INE_def] \\ metis_tac[])
     \\ rw[CARD_UNION_EQN]
     \\ fs[INE_IN])
 
 Theorem EULER0:
-  !l x z.
+  !x l z.
     CIRCUIT x l z ==>
     let G = PAIRS x l z in
     (!y. y <> x /\ y <> z ==> EVEN (DEG y G)) /\
     if x = z then EVEN (DEG x G) else ODD (DEG x G) /\ ODD (DEG z G)
 Proof
-  Induct >| [
-  (* empty list *)
+  ho_match_mp_tac CIRCUIT_ind
+  \\ conj_tac >| [
+    (* empty list *)
     rw[PAIRS_def, DEG_SINGLETON],
-  (* non-empty list *)
-  (* TODO: rename h to y *)
-    simp[PAIRS_def, CIRCUIT_def]
-    \\ ntac 4 strip_tac
-    \\ first_x_assum dxrule
-    \\ qspecl_then [`l`,`h`,`z`] assume_tac FINITE_PAIRS 
-    \\ simp[ODD_EVEN,DEG_INSERT_ADD,EVEN_ADD]
+    (* non-empty list *)
+    ntac 5 strip_tac
+    \\ first_x_assum mp_tac
+    \\ qspecl_then [`l`,`x'`,`z`] assume_tac FINITE_PAIRS 
+    \\ simp[PAIRS_def,ODD_EVEN,DEG_INSERT_ADD,EVEN_ADD]
     \\ rw[] \\ rw[DEG_SINGLETON,DEG_INSERT_ADD,EVEN_ADD] \\ rw[]
   ]
 QED
