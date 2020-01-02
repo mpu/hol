@@ -4,15 +4,14 @@ val _ = new_theory "euler"
 
 (* PAIRS x l z is the set of (oriented) edges used in a path
    from x to z going by vertices in l *)
-Definition PAIRS_def:
+Definition PAIRS_def[simp]:
   (PAIRS x [] z = {(x,z)}) /\
   (PAIRS x (y::l) z = (x,y) INSERT PAIRS y l z)
 End
 
 Theorem FINITE_PAIRS:
   !l x z. FINITE (PAIRS x l z)
-Proof
-  Induct \\ rw[PAIRS_def]
+Proof Induct \\ rw[]
 QED
 
 (* (x,y) INE G is true when (x,y) is an edge in the undirected
@@ -94,12 +93,12 @@ Proof
   ho_match_mp_tac CIRCUIT_ind
   \\ conj_tac >| [
     (* empty list *)
-    rw[PAIRS_def, DEG_SINGLETON],
+    rw[DEG_SINGLETON],
     (* non-empty list *)
     qx_genl_tac [`l`,`x`,`y`,`z`]
     \\ strip_tac \\ pop_assum mp_tac
     \\ qspecl_then [`l`,`y`,`z`] assume_tac FINITE_PAIRS 
-    \\ simp[PAIRS_def,ODD_EVEN,DEG_INSERT_ADD,EVEN_ADD]
+    \\ simp[ODD_EVEN,DEG_INSERT_ADD,EVEN_ADD]
     \\ rw[] \\ rw[DEG_SINGLETON,DEG_INSERT_ADD,EVEN_ADD] \\ rw[]
   ]
 QED
