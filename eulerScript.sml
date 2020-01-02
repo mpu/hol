@@ -4,9 +4,10 @@ val _ = new_theory "euler"
 
 (* PAIRS x l z is the set of (oriented) edges used in a path
    from x to z going by vertices in l *)
-val PAIRS_def = Define`
+Definition PAIRS_def:
   (PAIRS x [] z = {(x,z)}) /\
-  (PAIRS x (y::l) z = (x,y) INSERT PAIRS y l z)`
+  (PAIRS x (y::l) z = (x,y) INSERT PAIRS y l z)
+End
 
 Theorem FINITE_PAIRS:
   !l x z. FINITE (PAIRS x l z)
@@ -16,7 +17,8 @@ QED
 
 (* (x,y) INE G is true when (x,y) is an edge in the undirected
    graph G *)
-val INE_def = Define`INE (x,y) G = ((x,y) IN G \/ (y,x) IN G)`
+Definition INE_def: INE (x,y) G = ((x,y) IN G \/ (y,x) IN G)
+End
 val _ = Parse.set_fixity "INE" (Parse.Infix(Parse.NONASSOC, 425))
 (* use term_grammar () to print the current grammar *)
 
@@ -26,7 +28,8 @@ val (_, CIRCUIT_ind, _) = Hol_reln`
   (CIRCUIT x [] z) /\
   (~((x,y) INE PAIRS y l z) /\ CIRCUIT y l z ==> CIRCUIT x (y::l) z)`
 
-val NEIGHB_def = Define`NEIGHB x G = {y | (x,y) INE G}`
+Definition NEIGHB_def: NEIGHB x G = {y | (x,y) INE G}
+End
 
 Theorem FINITE_NEIGHB:
   !x G. FINITE G ==> FINITE (NEIGHB x G)
@@ -40,39 +43,46 @@ Proof
   \\ rw[]
 QED
 
-val DEG_def = Define`
-  DEG x G = CARD (NEIGHB x G) + if (x,x) IN G then 1 else 0`
+Definition DEG_def:
+  DEG x G = CARD (NEIGHB x G) + if (x,x) IN G then 1 else 0
+End
 
-val DEG_SINGLETON = Q.prove(
-  `!x y z. DEG x {(y,z)} =
-             if x <> y /\ x <> z then 0 else
-             if y = z then 2 else 1`,
-    rw[DEG_def, NEIGHB_def, INE_def] \\ rpt (fs[]));
+Theorem DEG_SINGLETON:
+  !x y z. DEG x {(y,z)} =
+          if x <> y /\ x <> z then 0 else
+          if y = z then 2 else 1
+Proof rw[DEG_def, NEIGHB_def, INE_def] \\ rpt (fs[])
+QED
 
-val INE_IN = Q.prove(
-  `!x E. (x,x) INE E <=> (x,x) IN E`,
-    rw[INE_def])
+Theorem INE_IN:
+  !x E. (x,x) INE E <=> (x,x) IN E
+Proof rw[INE_def]
+QED
 
-val INE_INSERT = Q.prove(
-  `!x y u v E. (x,y) INE ((u,v) INSERT E) <=> (x,y) INE {(u,v)} \/ (x,y) INE E`,
-    rw[INE_def] >> prove_tac[]);
+Theorem INE_INSERT:
+  !x y u v E. (x,y) INE ((u,v) INSERT E) <=>
+              (x,y) INE {(u,v)} \/ (x,y) INE E
+Proof rw[INE_def] \\ metis_tac[]
+QED
 
-val DEG_INSERT_ADD = Q.prove(
-  `!x y z E. FINITE E /\ ~((y,z) INE E) ==>
-             DEG x ((y,z) INSERT E) = DEG x {(y,z)} + DEG x E`,
-    simp[DEG_def]
-    \\ rpt strip_tac
-    \\ qmatch_abbrev_tac `CARD S0 + _ = CARD S1 + (CARD S2 + _)`
-    \\ `S0 = S2 UNION S1` by
-         (unabbrev_all_tac \\ rw[NEIGHB_def,Once INE_INSERT,UNION_DEF])
-    \\ pop_assum (fn eq => rewrite_tac [eq])
-    \\ `FINITE S1` by rw[Abbr`S1`,FINITE_NEIGHB]
-    \\ `FINITE S2` by rw[Abbr`S2`,FINITE_NEIGHB]
-    \\ `CARD (S2 INTER S1) = 0` by
-         (rw[Abbr`S1`,Abbr`S2`,EXTENSION,NEIGHB_def]
-          \\ fs[INE_def] \\ metis_tac[])
-    \\ rw[CARD_UNION_EQN]
-    \\ fs[INE_IN])
+Theorem DEG_INSERT_ADD:
+  !x y z E. FINITE E /\ ~((y,z) INE E) ==>
+            DEG x ((y,z) INSERT E) = DEG x {(y,z)} + DEG x E
+Proof
+  simp[DEG_def]
+  \\ rpt strip_tac
+  \\ qmatch_abbrev_tac `CARD S0 + _ = CARD S1 + (CARD S2 + _)`
+  \\ `S0 = S2 UNION S1` by
+       (unabbrev_all_tac \\ rw[NEIGHB_def,Once INE_INSERT,UNION_DEF])
+  \\ pop_assum (fn eq => rewrite_tac [eq])
+  \\ `FINITE S1` by rw[Abbr`S1`,FINITE_NEIGHB]
+  \\ `FINITE S2` by rw[Abbr`S2`,FINITE_NEIGHB]
+  \\ `CARD (S2 INTER S1) = 0` by
+       (rw[Abbr`S1`,Abbr`S2`,EXTENSION,NEIGHB_def]
+        \\ fs[INE_def] \\ metis_tac[])
+  \\ rw[CARD_UNION_EQN]
+  \\ fs[INE_IN]
+QED
 
 Theorem EULER0:
   !x l z.
