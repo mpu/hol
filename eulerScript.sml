@@ -96,9 +96,9 @@ Proof
     (* empty list *)
     rw[PAIRS_def, DEG_SINGLETON],
     (* non-empty list *)
-    ntac 5 strip_tac
-    \\ first_x_assum mp_tac
-    \\ qspecl_then [`l`,`x'`,`z`] assume_tac FINITE_PAIRS 
+    qx_genl_tac [`l`,`x`,`y`,`z`]
+    \\ strip_tac \\ pop_assum mp_tac
+    \\ qspecl_then [`l`,`y`,`z`] assume_tac FINITE_PAIRS 
     \\ simp[PAIRS_def,ODD_EVEN,DEG_INSERT_ADD,EVEN_ADD]
     \\ rw[] \\ rw[DEG_SINGLETON,DEG_INSERT_ADD,EVEN_ADD] \\ rw[]
   ]
