@@ -22,10 +22,6 @@ End
 val _ = Parse.set_fixity "INE" (Parse.Infix(Parse.NONASSOC, 425))
 (* use term_grammar () to print the current grammar *)
 
-Definition ING_def: ING x G = ?y. (x,y) INE G
-End
-val _ = Parse.set_fixity "ING" (Parse.Infix(Parse.NONASSOC, 425))
-
 (* A circuit is a path that does not go twice by the same
    undirected edge *)
 val (CIRCUIT_rules, CIRCUIT_ind, _) = Hol_reln`
@@ -135,7 +131,7 @@ Proof
   \\ rw[DEG_def,NEIGHB_def] \\ fs[INE_def]
 QED
 
-Theorem SIGMA_ADD:
+Theorem SUM_IMAGE_ADD:
   !f g s. FINITE s ==> SIGMA (\x. f x + g x) s = SIGMA f s + SIGMA g s
 Proof
   ntac 2 gen_tac
@@ -143,7 +139,37 @@ Proof
   \\ rw[SUM_IMAGE_THM,DELETE_NON_ELEMENT_RWT]
 QED
 
-(*
+Theorem SUM_IMAGE_INSERT:
+  !f s. FINITE s ==> !x. SIGMA f (x INSERT s) =
+                         if x IN s then SIGMA f s else f x + SIGMA f s
+Proof
+  rw[SUM_IMAGE_THM] \\ rw[]
+  THEN1 (
+    `s = x INSERT (s DELETE x)` by rw[INSERT_DELETE]
+    \\ pop_assum (CONV_TAC o RHS_CONV o DEPTH_CONV o REWR_CONV)
+    \\ rw[SUM_IMAGE_THM]
+  )
+  THEN1 rw[DELETE_NON_ELEMENT_RWT]
+QED
+
+Theorem DEG_NON_NODE:
+  !G x. FINITE G ==> x NOTIN NODES G ==> DEG x G = 0
+Proof
+  rw[DEG_def]
+  THEN1 (
+    `G = (x,x) INSERT G` by metis_tac[ABSORPTION]
+    \\ pop_assum SUBST1_TAC
+    \\ rw[NODES_INSERT]
+  )
+  THEN1 (
+    rw[FINITE_NEIGHB]
+    \\ rw[NEIGHB_def,EXTENSION]
+    \\ `(x,x') INE G ==> x IN NODES G` by
+         metis_tac[INE_NODES_INSERT,NODES_INSERT,INE_def,IN_INSERT]
+    \\ metis_tac[]
+  )
+QED
+
 Theorem HANDSHAKE:
   !G. FINITE G ==> EVEN (SIGMA (\x. DEG x G) (NODES G))
 Proof
@@ -157,13 +183,23 @@ Proof
     THEN1 simp[INE_NODES_INSERT,INE_DEG_INSERT]
     THEN1 (
       `FINITE (NODES ((x,y) INSERT G))` by rw[NODES_def]
-      \\ simp[DEG_INSERT_ADD,EVEN_ADD,SIGMA_ADD]
-
-      simp[DEG_INSERT_ADD]
-      DEG_INSERT_ADD
-      DEG_SINGLETON
+      \\ simp[DEG_INSERT_ADD,EVEN_ADD,SUM_IMAGE_ADD]
+      \\ `EVEN (SIGMA (\x. DEG x G) (NODES ((x,y) INSERT G)))` by
+           (fs[NODES_INSERT,SUM_IMAGE_INSERT]
+            \\ rw[] \\ fs[] \\ rw[DEG_NON_NODE])
+      \\ `FINITE (NODES G)` by rw[NODES_def] (* maybe extract as lemma *)
+      \\ rw[NODES_INSERT,SUM_IMAGE_THM,DELETE_INSERT]
+      THEN (
+        rw[DEG_SINGLETON,EVEN_ADD]
+        \\ `!n. n = 0 ==> EVEN n` by rw[]
+        \\ pop_assum match_mp_tac
+        \\ rw[SUM_IMAGE_ZERO]
+      )
     )
+  )
+QED
 
+(*
 Definition CIRCUIT_OF_def:
   CIRCUIT_OF G x l z =
   (CIRCUIT x l z /\ (!e. e INE PAIRS x l z <=> e INE G))
