@@ -1,4 +1,5 @@
 open HolKernel boolLib bossLib listTheory pred_setTheory arithmeticTheory
+     pairTheory
 
 val _ = new_theory "euler"
 
@@ -21,9 +22,13 @@ End
 val _ = Parse.set_fixity "INE" (Parse.Infix(Parse.NONASSOC, 425))
 (* use term_grammar () to print the current grammar *)
 
+Definition ING_def: ING x G = ?y. (x,y) INE G
+End
+val _ = Parse.set_fixity "ING" (Parse.Infix(Parse.NONASSOC, 425))
+
 (* A circuit is a path that does not go twice by the same
    undirected edge *)
-val (_, CIRCUIT_ind, _) = Hol_reln`
+val (CIRCUIT_rules, CIRCUIT_ind, _) = Hol_reln`
   (CIRCUIT x [] z) /\
   (~((x,y) INE PAIRS y l z) /\ CIRCUIT y l z ==> CIRCUIT x (y::l) z)`
 
@@ -35,10 +40,8 @@ Theorem FINITE_NEIGHB:
 Proof
   `!x G. NEIGHB x G = IMAGE SND (G INTER ({x} CROSS UNIV)) UNION
                       IMAGE FST (G INTER (UNIV CROSS {x}))` by
-    let open pairTheory in
-      rw[NEIGHB_def,INE_def,EXTENSION]
-      \\ metis_tac[PAIR,FST,SND]
-    end
+    (rw[NEIGHB_def,INE_def,EXTENSION]
+     \\ metis_tac[PAIR,FST,SND])
   \\ rw[]
 QED
 
@@ -103,8 +106,89 @@ Proof
   ]
 QED
 
-val _ = export_theory ()
+Definition NODES_def:
+  NODES G = IMAGE FST G UNION IMAGE SND G
+End
 
+Theorem NODES_INSERT:
+  !G x y. NODES ((x,y) INSERT G) = x INSERT y INSERT NODES G
+Proof
+  rw[NODES_def] \\ metis_tac[INSERT_UNION_EQ,UNION_COMM]
+QED
+
+Theorem INE_NODES_INSERT:
+  !G e. e INE G ==> NODES (e INSERT G) = NODES G
+Proof
+  Cases_on `e`
+  \\ rw[NODES_INSERT,INE_def]
+  \\ `q IN NODES G /\ r IN NODES G` by
+       (rw[NODES_def] \\ metis_tac[FST,SND])
+  \\ metis_tac[ABSORPTION]
+QED
+
+Theorem INE_DEG_INSERT:
+  !G e. e INE G ==> !x. DEG x (e INSERT G) = DEG x G
+Proof
+  rpt strip_tac
+  \\ `!x y. (x,y) INE e INSERT G <=> (x,y) INE G` by
+       (Cases_on `e` \\ fs[INE_def] \\ metis_tac[])
+  \\ rw[DEG_def,NEIGHB_def] \\ fs[INE_def]
+QED
+
+Theorem SIGMA_ADD:
+  !f g s. FINITE s ==> SIGMA (\x. f x + g x) s = SIGMA f s + SIGMA g s
+Proof
+  ntac 2 gen_tac
+  \\ ho_match_mp_tac FINITE_INDUCT
+  \\ rw[SUM_IMAGE_THM,DELETE_NON_ELEMENT_RWT]
+QED
+
+(*
+Theorem HANDSHAKE:
+  !G. FINITE G ==> EVEN (SIGMA (\x. DEG x G) (NODES G))
+Proof
+  ho_match_mp_tac FINITE_INDUCT
+  \\ conj_tac
+  THEN1 rw[NODES_def,SUM_IMAGE_THM]
+  THEN1 (
+    rw[] \\ pop_assum kall_tac
+    \\ Cases_on `e` \\ rename[`(x,y)`]
+    \\ Cases_on `(x,y) INE G`
+    THEN1 simp[INE_NODES_INSERT,INE_DEG_INSERT]
+    THEN1 (
+      `FINITE (NODES ((x,y) INSERT G))` by rw[NODES_def]
+      \\ simp[DEG_INSERT_ADD,EVEN_ADD,SIGMA_ADD]
+
+      simp[DEG_INSERT_ADD]
+      DEG_INSERT_ADD
+      DEG_SINGLETON
+    )
+
+Definition CIRCUIT_OF_def:
+  CIRCUIT_OF G x l z =
+  (CIRCUIT x l z /\ (!e. e INE PAIRS x l z <=> e INE G))
+End
+
+Theorem EULER1:
+  !G. FINITE G ==> !x. x ING G ==>
+    ((!y. EVEN (DEG y G)) ==> ?l. CIRCUIT_OF G x l x) /\
+    (!z. x <> z /\ z ING G /\ ODD (DEG x G) /\ ODD (DEG z G) /\
+         (!y. y <> x /\ y <> z ==> EVEN (DEG y G)) ==>
+         ?l. CIRCUIT_OF G x l z)
+Proof
+ho_match_mp_tac FINITE_COMPLETE_INDUCTION
+\\ ntac 2 strip_tac
+\\ rw[ING_def]
+THEN1 (
+  Cases_on `y = x`
+  THEN1 (
+    rw[]
+
+rw[]
+
+*)
+
+val _ = export_theory ()
 
 
 
