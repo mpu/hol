@@ -199,29 +199,79 @@ Proof
   )
 QED
 
-(*
+Theorem IN_NODES:
+  !G x. x IN NODES G ==> ?y. (x,y) INE G (* really <=> *)
+Proof
+  rw[NODES_def,INE_def]
+  (* \\ eq_tac \\ rw[] *)
+  \\ metis_tac[PAIR,SND,FST]
+QED
+
+Theorem DELETE_PSUBSET:
+  !s x. x IN s ==> (s DELETE x) PSUBSET s
+Proof
+  rw[PSUBSET_DEF,DELETE_SUBSET,EXTENSION] \\ metis_tac[]
+QED
+
+Theorem CIRCUIT_OF_INSERT:
+  !G x y z. ~((x,y) INE G) /\ (?l. CIRCUIT_OF G y l z) ==>
+            ?l. CIRCUIT_OF ((x,y) INSERT G) x l z
+Proof
+  rw[CIRCUIT_OF_def]
+  \\ qexists_tac `y::l`
+  \\ conj_tac
+  THEN1 (match_mp_tac (CONJUNCT2 CIRCUIT_rules) \\ rw[])
+  THEN1 (
+    Cases \\ rw[Once INE_INSERT]
+    \\ rw[INE_def] \\ metis_tac[]
+  )
+QED
+  
 Definition CIRCUIT_OF_def:
   CIRCUIT_OF G x l z =
   (CIRCUIT x l z /\ (!e. e INE PAIRS x l z <=> e INE G))
 End
 
+(*
 Theorem EULER1:
-  !G. FINITE G ==> !x. x ING G ==>
-    ((!y. EVEN (DEG y G)) ==> ?l. CIRCUIT_OF G x l x) /\
-    (!z. x <> z /\ z ING G /\ ODD (DEG x G) /\ ODD (DEG z G) /\
-         (!y. y <> x /\ y <> z ==> EVEN (DEG y G)) ==>
-         ?l. CIRCUIT_OF G x l z)
+  !G. FINITE G ==>
+  !x y. x IN NODES G /\ z IN NODES G /\
+        (if x = z
+         then (!v. EVEN (DEG v G))
+         else (ODD (DEG x G) /\ ODD (DEG z G) /\
+               (!v. v <> x /\ v <> z ==> EVEN (DEG v G)))) ==>
+        ?l. CIRCUIT_OF G x l z
 Proof
-ho_match_mp_tac FINITE_COMPLETE_INDUCTION
-\\ ntac 2 strip_tac
-\\ rw[ING_def]
-THEN1 (
-  Cases_on `y = x`
-  THEN1 (
-    rw[]
-
-rw[]
-
+  ho_match_mp_tac FINITE_COMPLETE_INDUCTION
+  \\ rw[]
+  \\ Cases_on `x = z`
+  THEN1 ( (* cycle *)
+    rw[] \\ qpat_x_assum `x IN NODES G` kall_tac
+    \\ first_assum (strip_assume_tac o MATCH_MP IN_NODES)
+    \\ Cases_on `y = x`
+    THEN1 ( (* y = x *)
+      rw[] \\ fs[INE_IN]
+      \\ `G = (x,x) INSERT G DELETE (x,x)` by metis_tac[INSERT_DELETE]
+      \\ pop_assum SUBST1_TAC
+      \\ match_mp_tac CIRCUIT_OF_INSERT
+      \\ conj_tac
+      THEN1 metis_tac[IN_DELETE,INE_IN]
+      THEN1 (
+        first_x_assum irule \\ rw[]
+        THEN1 cheat (* x IN NODES (G DELETE (x,x)) *)
+        THEN1 cheat (* idem *)
+        THEN1 rw[DELETE_PSUBSET]
+        THEN1 cheat (* EVEN (DEG v (G DELETE (x,x))) *)
+      )
+    )
+    THEN1 ( (* x <> y *)
+      cheat
+    )
+  )
+  THEN1 ( (* non-cycle *)
+    cheat
+  )
+QED
 *)
 
 val _ = export_theory ()
