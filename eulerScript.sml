@@ -66,7 +66,7 @@ Proof
 QED
 
 Theorem GRAPH_INDUCT:
-  !P. P {} /\ (!G x y. GRAPH G /\ P G ==> P (ADDE (x,y) G)) ==>
+  !P. P {} /\ (!G x y. GRAPH G /\ P G /\ (x,y) NOTIN G ==> P (ADDE (x,y) G)) ==>
       !G. GRAPH G ==> P G
 Proof
   ntac 2 strip_tac
@@ -80,9 +80,12 @@ Proof
     \\ `(y,x) IN G` by fs[GRAPH_def]
     \\ `G = ADDE (x,y) (DELE (x,y) G)` by rw[ADDE_DELE]
     \\ pop_assum SUBST1_TAC
-    \\ last_x_assum match_mp_tac \\ rw[]
-    \\ first_x_assum match_mp_tac \\ rw[]
-    \\ metis_tac[DELE_def,DELETE_PSUBSET,DELETE_SUBSET,SUBSET_PSUBSET_TRANS]
+    \\ last_x_assum match_mp_tac \\ reverse (rw[])
+    THEN1 rw[DELE_def]
+    THEN1 (
+      first_x_assum match_mp_tac \\ rw[]
+      \\ metis_tac[DELE_def,DELETE_PSUBSET,DELETE_SUBSET,SUBSET_PSUBSET_TRANS]
+    )
   )
 QED
 
@@ -187,25 +190,6 @@ Theorem NODES_ADDE:
 Proof rw[NODES_def,ADDE_def]
 QED
 
-Theorem IN_NODES_ADDE:
-  !G e. GRAPH G /\ e IN G ==> NODES (ADDE e G) = NODES G
-Proof
-  Cases_on `e`
-  \\ rw[NODES_ADDE]
-  \\ `q IN NODES G /\ r IN NODES G` by
-       (rw[NODES_def] \\ metis_tac[GRAPH_def,FST,SND])
-  \\ metis_tac[ABSORPTION]
-QED
-
-Theorem IN_DEG_ADDE:
-  !G e. GRAPH G /\ e IN G ==> !x. DEG x (ADDE e G) = DEG x G
-Proof
-  rpt strip_tac
-  \\ `!x y. (x,y) IN (ADDE e G) <=> (x,y) IN G` by
-       (Cases_on `e` \\ rw[IN_ADDE] \\ metis_tac[GRAPH_def])
-  \\ rw[DEG_def,NEIGHB_def]
-QED
-
 Theorem SUM_IMAGE_ADD:
   !f g s. FINITE s ==> SIGMA (\x. f x + g x) s = SIGMA f s + SIGMA g s
 Proof
@@ -251,22 +235,18 @@ Proof
   THEN1 rw[NODES_def,SUM_IMAGE_THM]
   THEN1 (
     rw[]
-    \\ Cases_on `(x,y) IN G`
-    THEN1 simp[IN_NODES_ADDE,IN_DEG_ADDE]
-    THEN1 (
-      `FINITE (NODES (ADDE (x,y) G))` by rw[NODES_def]
-      \\ simp[DEG_ADDE,EVEN_ADD,SUM_IMAGE_ADD]
-      \\ `EVEN (SIGMA (\x. DEG x G) (NODES (ADDE (x,y) G)))` by
-           (fs[NODES_ADDE,ADDE_def,SUM_IMAGE_INSERT]
-            \\ rw[] \\ fs[] \\ rw[DEG_NON_NODE])
-      \\ `FINITE (NODES G)` by rw[NODES_def]
-      \\ rw[NODES_ADDE,SUM_IMAGE_THM,DELETE_INSERT]
-      THEN (
-        rw[DEG_GRAPH1,EVEN_ADD]
-        \\ `!n. n = 0 ==> EVEN n` by rw[]
-        \\ pop_assum match_mp_tac
-        \\ rw[SUM_IMAGE_ZERO]
-      )
+    \\ `FINITE (NODES (ADDE (x,y) G))` by rw[NODES_def]
+    \\ simp[DEG_ADDE,EVEN_ADD,SUM_IMAGE_ADD]
+    \\ `EVEN (SIGMA (\x. DEG x G) (NODES (ADDE (x,y) G)))` by
+         (fs[NODES_ADDE,ADDE_def,SUM_IMAGE_INSERT]
+          \\ rw[] \\ fs[] \\ rw[DEG_NON_NODE])
+    \\ `FINITE (NODES G)` by rw[NODES_def]
+    \\ rw[NODES_ADDE,SUM_IMAGE_THM,DELETE_INSERT]
+    THEN (
+      rw[DEG_GRAPH1,EVEN_ADD]
+      \\ `!n. n = 0 ==> EVEN n` by rw[]
+      \\ pop_assum match_mp_tac
+      \\ rw[SUM_IMAGE_ZERO]
     )
   )
 QED
@@ -337,10 +317,30 @@ QED
 export_theory ();
 
 
+(* Attic 
 
+Theorem IN_NODES_ADDE:
+  !G e. GRAPH G /\ e IN G ==> NODES (ADDE e G) = NODES G
+Proof
+  Cases_on `e`
+  \\ rw[NODES_ADDE]
+  \\ `q IN NODES G /\ r IN NODES G` by
+       (rw[NODES_def] \\ metis_tac[GRAPH_def,FST,SND])
+  \\ metis_tac[ABSORPTION]
+QED
 
+Theorem IN_DEG_ADDE:
+  !G e. GRAPH G /\ e IN G ==> !x. DEG x (ADDE e G) = DEG x G
+Proof
+  rpt strip_tac
+  \\ `!x y. (x,y) IN (ADDE e G) <=> (x,y) IN G` by
+       (Cases_on `e` \\ rw[IN_ADDE] \\ metis_tac[GRAPH_def])
+  \\ rw[DEG_def,NEIGHB_def]
+QED
+*)
 
-(*
+(* Notes
+
 For most cases you want to use Define or the pretty syntax
 for Define, new_definition and so one are more low-level things.
 As for pretty vs non-pretty syntax: Use the one you think is
@@ -356,28 +356,3 @@ to any compset.
 
 Not sure if you can define a function without exporting it, maybe.
 *)
-
-(* STASH 
-
-val HOP_def = Define`
-  (HOP E x [] z <=> (x,z) IN E) /\
-  (HOP E x (y :: l) z <=> (x,y) IN E /\ HOP E y l z)`
-val HOP_PAIRS_SUBSET = Q.prove(
-  `HOP E x l z <=> PAIRS x l z SUBSET E`,
-    Q.SPEC_TAC (`x`,`x`) >>
-    Induct_on `l` >>
-    SRW_TAC[][HOP_def, PAIRS_def])
-
-val LIST_COMPLETE_INDUCT = Q.prove(
-  `!P. (!l. (!t. LENGTH t < LENGTH l ==> P t) ==> P l) ==> !l. P l`,
-    CONV_TAC (DEPTH_CONV RIGHT_IMP_FORALL_CONV)
-    \\ completeInduct_on `LENGTH l`
-    \\ rw[])
-
-val DEG_INE_EQUIV = Q.prove(
-  `!E G. (!a b. (a,b) INE E <=> (a,b) INE G) ==> !x. DEG x E = DEG x G`,
-    rw[DEG_def] >>
-    `(x,x) IN E <=> (x,x) IN G` by metis_tac[INE_def] >>
-    rw[])
-*)
-
