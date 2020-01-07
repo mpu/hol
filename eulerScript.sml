@@ -275,14 +275,14 @@ QED
 (*
 Theorem EULER1:
   !G. GRAPH G ==>
-  !x y. x IN NODES G /\ z IN NODES G /\
+  !x z. x IN NODES G /\ z IN NODES G /\
         (if x = z
          then (!v. EVEN (DEG v G))
          else (ODD (DEG x G) /\ ODD (DEG z G) /\
                (!v. v <> x /\ v <> z ==> EVEN (DEG v G)))) ==>
         ?l. CIRCUIT_OF G x l z
 Proof
-  ho_match_mp_tac FINITE_COMPLETE_INDUCTION
+  ho_match_mp_tac GRAPH_COMPLETE_INDUCTION
   \\ rw[]
   \\ Cases_on `x = z`
   THEN1 ( (* cycle *)
@@ -290,12 +290,14 @@ Proof
     \\ first_assum (strip_assume_tac o MATCH_MP IN_NODES)
     \\ Cases_on `y = x`
     THEN1 ( (* y = x *)
-      rw[] \\ fs[INE_IN]
-      \\ `G = (x,x) INSERT G DELETE (x,x)` by metis_tac[INSERT_DELETE]
+      rw[]
+      \\ `G = ADDE (x,x) (DELE (x,x) G)` by rw[ADDE_DELE]
       \\ pop_assum SUBST1_TAC
+      (* Case analysis on DELE (x,x) G = {}; could be pushed even
+         before the first case analysis on x = z *)
       \\ match_mp_tac CIRCUIT_OF_INSERT
       \\ conj_tac
-      THEN1 metis_tac[IN_DELETE,INE_IN]
+      THEN1 rw[DELE_def]
       THEN1 (
         first_x_assum irule \\ rw[]
         THEN1 cheat (* x IN NODES (G DELETE (x,x)) *)
