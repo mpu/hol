@@ -1,5 +1,5 @@
 open HolKernel boolLib bossLib listTheory pred_setTheory arithmeticTheory
-     pairTheory;
+     pairTheory set_relationTheory;
 
 new_theory "euler";
 
@@ -33,12 +33,12 @@ Definition DELE_def:
   DELE (x,y) G = G DELETE (x,y) DELETE (y,x)
 End
 
-Theorem GRAPH_RWT[simp]:
+Theorem GRAPH_CONV_THMS[simp]:
   GRAPH {} /\
-  (!x y. GRAPH (GRAPH1 (x,y))) /\
-  (!G. GRAPH G ==> FINITE G) /\
-  (!G e. GRAPH G ==> GRAPH (ADDE e G)) /\
-  (!G e. GRAPH G ==> GRAPH (DELE e G))
+  GRAPH (GRAPH1 (x,y)) /\
+  (GRAPH G ==> FINITE G) /\
+  (GRAPH G ==> GRAPH (ADDE e G)) /\
+  (GRAPH G ==> GRAPH (DELE e G))
 Proof
   rw[GRAPH_def,GRAPH1_def]
   THEN1 metis_tac[]
@@ -211,7 +211,7 @@ Proof
   THEN1 rw[DELETE_NON_ELEMENT_RWT]
 QED
 
-Theorem DEG_NON_NODE:
+Theorem DEG_NOTIN_NODES:
   !G x. FINITE G /\ x NOTIN NODES G ==> DEG x G = 0
 Proof
   rw[DEG_def]
@@ -239,7 +239,7 @@ Proof
     \\ simp[DEG_ADDE,EVEN_ADD,SUM_IMAGE_ADD]
     \\ `EVEN (SIGMA (\x. DEG x G) (NODES (ADDE (x,y) G)))` by
          (fs[NODES_ADDE,ADDE_def,SUM_IMAGE_INSERT]
-          \\ rw[] \\ fs[] \\ rw[DEG_NON_NODE])
+          \\ rw[] \\ fs[] \\ rw[DEG_NOTIN_NODES])
     \\ `FINITE (NODES G)` by rw[NODES_def]
     \\ rw[NODES_ADDE,SUM_IMAGE_THM,DELETE_INSERT]
     THEN (
@@ -252,9 +252,8 @@ Proof
 QED
 
 Theorem IN_NODES:
-  !G x. x IN NODES G ==> ?y. (x,y) IN G (* really <=> *)
-Proof
-  rw[NODES_def] (* \\ eq_tac \\ rw[] *) \\ metis_tac[PAIR,SND,FST]
+  !G x. x IN NODES G ==> ?y. (x,y) IN G
+Proof rw[NODES_def] \\ metis_tac[PAIR,SND,FST]
 QED
 
 Definition CIRCUIT_OF_def:
@@ -262,14 +261,59 @@ Definition CIRCUIT_OF_def:
 End
 
 Theorem CIRCUIT_OF_ADDE:
-  !G x y z. (x,y) NOTIN G /\ (?l. CIRCUIT_OF G y l z) ==>
-            ?l. CIRCUIT_OF (ADDE (x,y) G) x l z
+  !G x y l z. (x,y) NOTIN G /\ CIRCUIT_OF G y l z ==>
+              CIRCUIT_OF (ADDE (x,y) G) x (y::l) z
+Proof rw[CIRCUIT_OF_def] \\ rw[CIRCUIT_rules]
+QED
+
+Definition CONNECTED_def:
+  CONNECTED G = !x y. x IN NODES G /\ y IN NODES G ==> (x,y) IN tc G
+End
+
+Theorem GRAPH_TC:
+  !G. GRAPH G ==> GRAPH (tc G)
 Proof
-  rw[CIRCUIT_OF_def]
-  \\ qexists_tac `y::l`
-  \\ conj_tac
-  THEN1 (match_mp_tac (CONJUNCT2 CIRCUIT_rules) \\ rw[])
-  THEN1 rw[]
+  rw[GRAPH_def]
+  THEN1 (
+    `!x y. (x,y) IN tc G ==> (y,x) IN tc G` by
+      (ho_match_mp_tac tc_ind \\ metis_tac[tc_rules])
+    \\ eq_tac \\ rw[]
+  )
+  THEN1 (
+    (* TODO: extract FINITE s ==> FINITE (tc s) as a lemma *)
+    `!x y. (x,y) IN G ==> x IN NODES G /\ y IN NODES G` by
+      (rw[NODES_def] \\ metis_tac[FST,SND])
+    \\ `!x y. (x,y) IN tc G ==> (x,y) IN (NODES G CROSS NODES G)` by
+         (ho_match_mp_tac tc_ind \\ rw[] \\ metis_tac[])
+    \\ `tc G SUBSET NODES G CROSS NODES G` by
+         (rewrite_tac[SUBSET_DEF] \\ gen_tac \\ Cases_on `x` \\ rw[])
+    \\ `FINITE (NODES G)` by rw[NODES_def] (* TODO: extract as lemma in simp *)
+    \\ mp_tac (Q.ISPEC `NODES (G: ('a # 'a) set) CROSS NODES G` SUBSET_FINITE)
+    \\ rw[]
+  )
+QED
+
+Theorem CONNECTED_DELE:
+  !G x y. GRAPH G /\ CONNECTED G /\ (x,y) IN tc (DELE (x,y) G) ==>
+          CONNECTED (DELE (x,y) G)
+Proof
+  rw[] \\ simp[CONNECTED_def] \\ rw[]
+  \\ `!n. n IN NODES (DELE (x,y) G) ==> n IN NODES G`
+       by (rw[DELE_def,NODES_def] \\ metis_tac[])
+  \\ `(x',y') IN tc G` by fs[CONNECTED_def]
+  \\ ntac 2 (qpat_x_assum `_ IN NODES _` kall_tac)
+  \\ pop_assum mp_tac
+  \\ qspec_tac (`y'`,`y'`) \\ qspec_tac (`x'`,`x'`)
+  \\ ho_match_mp_tac tc_ind \\ rw[tc_rules]
+  \\ `(y,x) IN tc (DELE (x,y) G)` by
+       metis_tac[GRAPH_TC,GRAPH_CONV_THMS,GRAPH_def]
+  \\ Cases_on `(x',y') <> (x,y) /\ (x',y') <> (y,x)`
+  THEN1 (
+    simp[DELE_def]
+    \\ rename[`_ <> xy /\ _ <> yx`]
+    \\ rw[tc_rules]
+  )
+  THEN1 (rw[] \\ rw[])
 QED
 
 (*
