@@ -16,7 +16,7 @@ Definition GRAPH1_def:
 End
 
 Theorem GRAPH_COMPLETE_INDUCTION:
-  !P. (!G. GRAPH G /\ (!E. GRAPH E /\ E PSUBSET G ==> P E) ==> P G) ==>
+  !P. (!G. (!E. GRAPH E /\ E PSUBSET G ==> P E) /\ GRAPH G ==> P G) ==>
       !G. GRAPH G ==> P G
 Proof
   gen_tac
@@ -288,7 +288,7 @@ Proof
     \\ `tc G SUBSET NODES G CROSS NODES G` by
          (rewrite_tac[SUBSET_DEF] \\ gen_tac \\ Cases_on `x` \\ rw[])
     \\ `FINITE (NODES G)` by rw[NODES_def] (* TODO: extract as lemma in simp *)
-    \\ mp_tac (Q.ISPEC `NODES (G: ('a # 'a) set) CROSS NODES G` SUBSET_FINITE)
+    \\ qspec_then `NODES G CROSS NODES G` mp_tac SUBSET_FINITE
     \\ rw[]
   )
 QED
@@ -297,13 +297,13 @@ Theorem CONNECTED_DELE:
   !G x y. GRAPH G /\ CONNECTED G /\ (x,y) IN tc (DELE (x,y) G) ==>
           CONNECTED (DELE (x,y) G)
 Proof
-  rw[] \\ simp[CONNECTED_def] \\ rw[]
+  rpt strip_tac \\ rw[CONNECTED_def]
   \\ `!n. n IN NODES (DELE (x,y) G) ==> n IN NODES G`
        by (rw[DELE_def,NODES_def] \\ metis_tac[])
   \\ `(x',y') IN tc G` by fs[CONNECTED_def]
   \\ ntac 2 (qpat_x_assum `_ IN NODES _` kall_tac)
   \\ pop_assum mp_tac
-  \\ qspec_tac (`y'`,`y'`) \\ qspec_tac (`x'`,`x'`)
+  \\ map_every qid_spec_tac [`y'`,`x'`]
   \\ ho_match_mp_tac tc_ind \\ rw[tc_rules]
   \\ `(y,x) IN tc (DELE (x,y) G)` by
        metis_tac[GRAPH_TC,GRAPH_CONV_THMS,GRAPH_def]
@@ -316,9 +316,16 @@ Proof
   THEN1 (rw[] \\ rw[])
 QED
 
+Theorem DELE_EMPTY_CASES:
+  !G x y. GRAPH G /\ DELE (x,y) G = {} ==> (G = {} \/ G = GRAPH1 (x,y))
+Proof
+  rw[DELE_def,GRAPH1_def,EXTENSION]
+  \\ metis_tac[GRAPH_def,PAIR,FST,SND] (* that's a bit of work! *)
+QED
+
 (*
 Theorem EULER1:
-  !G. GRAPH G ==>
+  !G. GRAPH G /\ CONNECTED G ==>
   !x z. x IN NODES G /\ z IN NODES G /\
         (if x = z
          then (!v. EVEN (DEG v G))
@@ -326,36 +333,51 @@ Theorem EULER1:
                (!v. v <> x /\ v <> z ==> EVEN (DEG v G)))) ==>
         ?l. CIRCUIT_OF G x l z
 Proof
-  ho_match_mp_tac GRAPH_COMPLETE_INDUCTION
+  CONV_TAC (BINDER_CONV (REWR_CONV (GSYM AND_IMP_INTRO)))
+  \\ ho_match_mp_tac GRAPH_COMPLETE_INDUCTION
   \\ rw[]
-  \\ Cases_on `x = z`
-  THEN1 ( (* cycle *)
-    rw[] \\ qpat_x_assum `x IN NODES G` kall_tac
-    \\ first_assum (strip_assume_tac o MATCH_MP IN_NODES)
-    \\ Cases_on `y = x`
-    THEN1 ( (* y = x *)
-      rw[]
-      \\ `G = ADDE (x,x) (DELE (x,x) G)` by rw[ADDE_DELE]
-      \\ pop_assum SUBST1_TAC
-      (* Case analysis on DELE (x,x) G = {}; could be pushed even
-         before the first case analysis on x = z *)
-      \\ match_mp_tac CIRCUIT_OF_INSERT
-      \\ conj_tac
-      THEN1 rw[DELE_def]
-      THEN1 (
-        first_x_assum irule \\ rw[]
-        THEN1 cheat (* x IN NODES (G DELETE (x,x)) *)
-        THEN1 cheat (* idem *)
-        THEN1 rw[DELETE_PSUBSET]
-        THEN1 cheat (* EVEN (DEG v (G DELETE (x,x))) *)
-      )
-    )
-    THEN1 ( (* x <> y *)
-      cheat
+  \\ Cases_on `DELE (x,z) G = {}`
+  THEN1 (
+    (* base case: graph is a single edge *)
+    `G = {} \/ G = GRAPH1 (x,z)` by rw[DELE_EMPTY_CASES] (* TODO: is it possible to not state this? *)
+    THEN1 fs[NODES_def]
+    THEN1 (
+      qexists_tac `[]`
+      \\ `(x,z) IN GRAPH1 (x,z)` by rw[GRAPH1_def]
+      \\ rw[CIRCUIT_OF_def,CIRCUIT_rules]
     )
   )
-  THEN1 ( (* non-cycle *)
-    cheat
+  THEN1 (
+    qmatch_assum_abbrev_tac `G' <> {}`
+    \\ qpat_x_assum `x IN NODES G` (strip_assume_tac o MATCH_MP IN_NODES)
+    \\ Cases_on `x = z` (* Cases on x = y first? *)
+    THEN1 (
+      rw[] \\ qpat_x_assum `x IN NODES G` kall_tac
+      \\ Cases_on `y = x`
+      THEN1 (
+        rw[]
+        \\ `G = ADDE (x,x) (DELE (x,x) G)` by rw[ADDE_DELE]
+        \\ pop_assum SUBST1_TAC
+        (* Case analysis on DELE (x,x) G = {}; could be pushed even
+           before the first case analysis on x = z *)
+        \\ match_mp_tac CIRCUIT_OF_INSERT
+        \\ conj_tac
+        THEN1 rw[DELE_def]
+        THEN1 (
+          first_x_assum irule \\ rw[]
+          THEN1 cheat (* x IN NODES (G DELETE (x,x)) *)
+          THEN1 cheat (* idem *)
+          THEN1 rw[DELETE_PSUBSET]
+          THEN1 cheat (* EVEN (DEG v (G DELETE (x,x))) *)
+        )
+      )
+      THEN1 ( (* x <> y *)
+        cheat
+      )
+    )
+    THEN1 ( (* non-cycle *)
+      cheat
+    )
   )
 QED
 *)
