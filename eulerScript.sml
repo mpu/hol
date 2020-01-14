@@ -323,6 +323,78 @@ Proof
   \\ metis_tac[GRAPH_def,PAIR,FST,SND] (* that's a bit of work! *)
 QED
 
+Definition REACH_def:
+  REACH x G = { e | e IN G /\ (x,SND e) IN tc G }
+End
+
+Theorem REACH_SUBSET:
+  !G n. REACH n G SUBSET G
+Proof
+  rw[REACH_def,SUBSET_DEF]
+QED
+
+Theorem GRAPH_REACH:
+  !G n. GRAPH G ==> GRAPH (REACH n G)
+Proof
+  rw[GRAPH_def]
+  THEN1 (
+    rw[REACH_def]
+    \\ eq_tac \\ rw[]
+    \\ match_mp_tac ((CONJUNCT2 o Q.SPEC `G`) tc_rules)
+    THEN1 (qexists_tac `y` \\ rw[tc_rules])
+    THEN1 (qexists_tac `x` \\ rw[tc_rules])
+  )
+  THEN1 (
+    pop_assum (match_mp_tac o MATCH_MP SUBSET_FINITE)
+    \\ rw[REACH_SUBSET]
+  )
+QED
+
+(* Combined with tc_mono and REACH_SUBSET, we can obtain the
+   weaker conclusion (x,y) IN tc G *)
+Theorem IN_NODES_REACH:
+  !G x y. y IN NODES (REACH x G) ==> (x,y) IN tc (REACH x G)
+Proof
+  cheat
+  (*
+  rw[REACH_def,NODES_def] \\ rw[]
+  \\ Cases_on `x'` \\ fs[]
+  \\ qpat_x_assum `_ IN G` mp_tac
+  \\ qid_spec_tac `q`
+  \\ pop_assum mp_tac
+  \\ map_every qid_spec_tac [`r`,`x`]
+  \\ ho_match_mp_tac tc_ind_left \\ rw[]
+  THEN1 (
+    match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
+    \\ qexists_tac `r`
+    \\ rw[tc_rules]
+    \\ match_mp_tac ((CONJUNCT1 o SPEC_ALL) tc_rules)
+    \\ rw[tc_rules]
+    \\ cheat (* Needs G graph *)
+    \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
+    \\ qexists_tac `r` \\ rw[tc_rules]
+    \\ cheat (* Needs G graph *)
+  )
+  THEN1 (
+    res_tac
+    \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
+    \\ qexists_tac `x'`
+    \\ rw[tc_rules]
+    \\ cheat (* Need (x,y) in G ==> REACH x G = REACH y G *)
+  )
+  *)
+QED
+
+Theorem CONNECTED_REACH:
+  !G n. GRAPH G ==> CONNECTED (REACH n G)
+Proof
+  rw[CONNECTED_def]
+  \\ ntac 2 (first_x_assum (assume_tac o MATCH_MP IN_NODES_REACH))
+  \\ `(x,n) IN tc (REACH n G)` by metis_tac[GRAPH_def,GRAPH_TC,GRAPH_REACH]
+  \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
+  \\ qexists_tac `n` \\ rw[tc_rules]
+QED
+
 (*
 Theorem EULER1:
   !G. GRAPH G /\ CONNECTED G ==>
@@ -336,48 +408,50 @@ Proof
   CONV_TAC (BINDER_CONV (REWR_CONV (GSYM AND_IMP_INTRO)))
   \\ ho_match_mp_tac GRAPH_COMPLETE_INDUCTION
   \\ rw[]
-  \\ Cases_on `DELE (x,z) G = {}`
+  \\ qpat_assum `x IN NODES G` (strip_assume_tac o MATCH_MP IN_NODES)
+  \\ Cases_on `DELE (x,y) G = {}`
   THEN1 (
-    (* base case: graph is a single edge *)
-    `G = {} \/ G = GRAPH1 (x,z)` by rw[DELE_EMPTY_CASES] (* TODO: is it possible to not state this? *)
+    (* base case: graph is a single edge (x,y) *)
+    last_x_assum kall_tac
+    \\ `G = {} \/ G = GRAPH1 (x,y)` by rw[DELE_EMPTY_CASES] (* TODO: is it possible to not state this? *)
     THEN1 fs[NODES_def]
     THEN1 (
       qexists_tac `[]`
-      \\ `(x,z) IN GRAPH1 (x,z)` by rw[GRAPH1_def]
+      \\ `z = y` by (
+           fs[GRAPH1_def,NODES_def]
+           \\ qpat_x_assum `z = x` (mp_tac o GSYM) \\ rw[]
+           \\ CCONTR_TAC
+           \\ first_x_assum (qspec_then `y` mp_tac)
+           \\ simp[DEG_def,NEIGHB_def]
+         )
+      \\ `(x,y) IN GRAPH1 (x,y)` by rw[GRAPH1_def]
       \\ rw[CIRCUIT_OF_def,CIRCUIT_rules]
     )
   )
   THEN1 (
-    qmatch_assum_abbrev_tac `G' <> {}`
-    \\ qpat_x_assum `x IN NODES G` (strip_assume_tac o MATCH_MP IN_NODES)
-    \\ Cases_on `x = z` (* Cases on x = y first? *)
-    THEN1 (
-      rw[] \\ qpat_x_assum `x IN NODES G` kall_tac
-      \\ Cases_on `y = x`
-      THEN1 (
-        rw[]
-        \\ `G = ADDE (x,x) (DELE (x,x) G)` by rw[ADDE_DELE]
-        \\ pop_assum SUBST1_TAC
-        (* Case analysis on DELE (x,x) G = {}; could be pushed even
-           before the first case analysis on x = z *)
-        \\ match_mp_tac CIRCUIT_OF_INSERT
-        \\ conj_tac
-        THEN1 rw[DELE_def]
-        THEN1 (
-          first_x_assum irule \\ rw[]
-          THEN1 cheat (* x IN NODES (G DELETE (x,x)) *)
-          THEN1 cheat (* idem *)
-          THEN1 rw[DELETE_PSUBSET]
-          THEN1 cheat (* EVEN (DEG v (G DELETE (x,x))) *)
-        )
-      )
-      THEN1 ( (* x <> y *)
-        cheat
-      )
-    )
-    THEN1 ( (* non-cycle *)
-      cheat
-    )
+    (* Split the graph in two, X = REACH x G' and Y = REACH y G'
+       where G' = DELE (x,y) G; then G = ADDE (x,y) (X UNION Y);
+       and apply the induction hypotheses on X and Y *)
+
+    (* Need a case analysis to know which of x,y,z are equal *)
+    (* If x = y we should be able to apply the induction hypothesis
+       on G' directly and connect x -- x to x --* z *)
+    (* If x <> y we split G' = REACH x G' UNION REACH y G';
+       each component is connected and satisfies the hypotheses
+       so we can build x --* x and connect it to y --* z *)
+
+    (* Might not be useful
+     --
+    `G = ADDE (x,y) (DELE (x,y) G)` by rw[ADDE_DELE]
+    \\ pop_assum SUBST1_TAC
+    \\ qmatch_abbrev_tac `?l. CIRCUIT_OF (ADDE _ G') x l z`
+    \\ `(?l. CIRCUIT_OF G' y l z) ==> ?l. CIRCUIT_OF (ADDE (x,y) G') x l z`
+         by (strip_tac \\ qexists_tac `y::l`
+             \\ rw[Abbr`G'`,CIRCUIT_OF_ADDE,DELE_def])
+    \\ pop_assum match_mp_tac
+    *)
+
+    \\ cheat
   )
 QED
 *)
