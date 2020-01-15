@@ -353,43 +353,46 @@ QED
 (* Combined with tc_mono and REACH_SUBSET, we can obtain the
    weaker conclusion (x,y) IN tc G *)
 Theorem IN_NODES_REACH:
-  !G x y. y IN NODES (REACH x G) ==> (x,y) IN tc (REACH x G)
+  !G x y. GRAPH G /\ y IN NODES (REACH x G) ==> (x,y) IN tc (REACH x G)
 Proof
-  cheat
-  (*
-  rw[REACH_def,NODES_def] \\ rw[]
-  \\ Cases_on `x'` \\ fs[]
-  \\ qpat_x_assum `_ IN G` mp_tac
-  \\ qid_spec_tac `q`
+  rpt strip_tac
   \\ pop_assum mp_tac
-  \\ map_every qid_spec_tac [`r`,`x`]
-  \\ ho_match_mp_tac tc_ind_left \\ rw[]
+  \\ `!G. GRAPH G ==> NODES G = IMAGE SND G` by
+       (simp[GRAPH_def,EXTENSION,NODES_def]
+        \\ metis_tac[PAIR,FST,SND])
+  \\ pop_assum (fn thm => rw[GRAPH_REACH,thm])
+  \\ Cases_on `x'` \\ rename [`(y,z) IN REACH x G`]
+  \\ simp[]
+  \\ `(x,z) IN tc G /\ (y,z) IN G` by fs[REACH_def]
+  \\ `(x,y) IN tc G` by metis_tac[GRAPH_def,tc_rules]
+  \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
+  \\ qexists_tac `y` \\ rw[tc_rules]
+  \\ pop_assum mp_tac
+  \\ ntac 3 (pop_assum kall_tac)
+  \\ map_every qid_spec_tac [`y`,`x`]
+  (* At this point we prove
+    (x,y) IN tc G ==> (x,y) IN tc (REACH x G) *)
+  \\ ho_match_mp_tac tc_ind_right \\ rw[]
+  THEN1 rw[tc_rules,REACH_def]
   THEN1 (
-    match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
-    \\ qexists_tac `r`
-    \\ rw[tc_rules]
+    rename [`(y,z) IN G`,`(x,y) IN tc _`]
+    \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
+    \\ qexists_tac `y` \\ rw[tc_rules]
     \\ match_mp_tac ((CONJUNCT1 o SPEC_ALL) tc_rules)
-    \\ rw[tc_rules]
-    \\ cheat (* Needs G graph *)
+    \\ rw[REACH_def]
     \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
-    \\ qexists_tac `r` \\ rw[tc_rules]
-    \\ cheat (* Needs G graph *)
+    \\ qexists_tac `y` \\ rw[tc_rules]
+    \\ irule (CONV_RULE (RAND_CONV (REWR_CONV SUBSET_DEF)) tc_mono)
+    \\ qexists_tac `REACH x G`
+    \\ rw[REACH_SUBSET]
   )
-  THEN1 (
-    res_tac
-    \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
-    \\ qexists_tac `x'`
-    \\ rw[tc_rules]
-    \\ cheat (* Need (x,y) in G ==> REACH x G = REACH y G *)
-  )
-  *)
 QED
 
 Theorem CONNECTED_REACH:
   !G n. GRAPH G ==> CONNECTED (REACH n G)
 Proof
   rw[CONNECTED_def]
-  \\ ntac 2 (first_x_assum (assume_tac o MATCH_MP IN_NODES_REACH))
+  \\ imp_res_tac IN_NODES_REACH
   \\ `(x,n) IN tc (REACH n G)` by metis_tac[GRAPH_def,GRAPH_TC,GRAPH_REACH]
   \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
   \\ qexists_tac `n` \\ rw[tc_rules]
