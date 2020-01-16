@@ -388,6 +388,7 @@ Proof
   )
 QED
 
+(*
 Theorem CONNECTED_REACH:
   !G n. GRAPH G ==> CONNECTED (REACH n G)
 Proof
@@ -397,6 +398,65 @@ Proof
   \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
   \\ qexists_tac `n` \\ rw[tc_rules]
 QED
+
+Theorem CONNECTED_SPLIT:
+  !G x y. GRAPH G /\ CONNECTED G /\ (x,y) IN G ==>
+          DELE (x,y) G = REACH x (DELE (x,y) G) UNION REACH y (DELE (x,y) G)
+Proof
+  rpt strip_tac
+  \\ match_mp_tac SUBSET_ANTISYM \\ reverse conj_tac
+  THEN1 rw[REACH_SUBSET]
+  THEN1 (
+    rw[SUBSET_DEF]
+    \\ Cases_on `x'`
+    \\ rename [`(a,b) IN DELE _ _`]
+    \\ simp[REACH_def]
+    \\ pop_assum mp_tac
+
+    (* On what should the induction be done... *)
+
+    \\ `(x,b) IN tc G` by (
+         `(a,b) IN G` by fs[DELE_def]
+         \\ fs[CONNECTED_def]
+         \\ first_assum irule
+         \\ rw[NODES_def]
+         THEN1 (qexists_tac `(x,y)` \\ rw[])
+         THEN1 (qexists_tac `(b,a)` \\ rw[] \\ fs[GRAPH_def])
+       )
+
+
+
+
+    (* TODO: extract a lemma *)
+    \\ simp[REACH_def]
+    \\ qpat_x_assum `(x,y) IN G` mp_tac
+    \\ qpat_x_assum `b <> y` mp_tac
+    \\ qid_spec_tac `y`
+    \\ qpat_x_assum `(x,b) IN tc G` mp_tac
+    \\ ntac 2 (pop_assum kall_tac)
+    \\ map_every qid_spec_tac [`b`,`x`]
+    \\ ho_match_mp_tac tc_ind_right \\ rw[]
+    THEN1 (
+      disj1_tac
+      \\ match_mp_tac ((CONJUNCT1 o SPEC_ALL) tc_rules)
+      \\ rw[DELE_def]
+      \\ cheat (* x <> y *)
+    )
+    THEN1 (
+      Cases_on `b' = y`
+      THEN1 (
+        rw[]
+        \\ disj1_tac
+        \\ match_mp_tac ((CONJUNCT1 o SPEC_ALL) tc_rules)
+        \\ rw[DELE_def]
+        \\ cheat (* x <> y *)
+      )
+      THEN1 (
+        first_x_assum (assume_tac o Q.SPEC `x`)
+      )
+    )
+QED
+*)
 
 (*
 Theorem EULER1:
@@ -463,6 +523,20 @@ export_theory ();
 
 
 (* Attic 
+
+(* Those cannot be used by the simplifier unfortunately because a variable
+   of the hypotheses does not appear in the conclusion. *)
+Theorem FST_EDGE_IN_NODES[simp]:
+  !G x y. GRAPH G /\ (x,y) IN G ==> x IN NODES G
+Proof
+  rw[NODES_def] \\ qexists_tac `(x,y)` \\ rw[]
+QED
+
+Theorem SND_EDGE_IN_NODES[simp]:
+  !G x y. GRAPH G /\ (x,y) IN G ==> y IN NODES G
+Proof
+  rw[NODES_def] \\ qexists_tac `(y,x)` \\ rw[] \\ fs[GRAPH_def]
+QED
 
 Theorem IN_NODES_ADDE:
   !G e. GRAPH G /\ e IN G ==> NODES (ADDE e G) = NODES G
