@@ -267,7 +267,7 @@ Proof rw[CIRCUIT_OF_def] \\ rw[CIRCUIT_rules]
 QED
 
 Definition CONNECTED_def:
-  CONNECTED G = !x y. x IN NODES G /\ y IN NODES G ==> (x,y) IN tc G
+  CONNECTED G = !x y. x IN NODES G /\ y IN NODES G /\ x <> y ==> (x,y) IN tc G
 End
 
 Theorem GRAPH_TC:
@@ -301,8 +301,8 @@ Proof
   \\ `!n. n IN NODES (DELE (x,y) G) ==> n IN NODES G`
        by (rw[DELE_def,NODES_def] \\ metis_tac[])
   \\ `(x',y') IN tc G` by fs[CONNECTED_def]
-  \\ ntac 2 (qpat_x_assum `_ IN NODES _` kall_tac)
   \\ pop_assum mp_tac
+  \\ ntac 4 (pop_assum kall_tac)
   \\ map_every qid_spec_tac [`y'`,`x'`]
   \\ ho_match_mp_tac tc_ind \\ rw[tc_rules]
   \\ `(y,x) IN tc (DELE (x,y) G)` by
@@ -388,7 +388,6 @@ Proof
   )
 QED
 
-(*
 Theorem CONNECTED_REACH:
   !G n. GRAPH G ==> CONNECTED (REACH n G)
 Proof
@@ -399,6 +398,7 @@ Proof
   \\ qexists_tac `n` \\ rw[tc_rules]
 QED
 
+(*
 Theorem CONNECTED_SPLIT:
   !G x y. GRAPH G /\ CONNECTED G /\ (x,y) IN G ==>
           DELE (x,y) G = REACH x (DELE (x,y) G) UNION REACH y (DELE (x,y) G)
