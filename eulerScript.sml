@@ -398,6 +398,43 @@ Proof
   \\ qexists_tac `n` \\ rw[tc_rules]
 QED
 
+Theorem PATH_SPLIT[local]:
+  !G z w. (z,w) IN tc G ==>
+          !x y. (x,y) IN G /\ w <> y /\ w <> x ==>
+                (z,w) IN tc (DELE (x,y) G) \/
+                (x,w) IN tc (DELE (x,y) G) \/
+                (y,w) IN tc (DELE (x,y) G)
+Proof
+  strip_tac
+  \\ ho_match_mp_tac tc_ind_left \\ rw[]
+  THEN1 (
+    disj1_tac
+    \\ `(z,w) IN DELE (x,y) G` suffices_by rw[tc_rules]
+    \\ rw[DELE_def]
+  )
+  THEN1 (
+    first_x_assum (mp_tac o Q.SPECL [`x`,`y`])
+    \\ disch_then (mp_tac o REWRITE_RULE[GSYM AND_IMP_INTRO])
+    \\ rpt (disch_then (fn th => first_assum (mp_tac o MATCH_MP th)))
+    \\ reverse strip_tac
+    THEN1 (disj2_tac \\ disj2_tac \\ rw[])
+    THEN1 (disj2_tac \\ disj1_tac \\ rw[])
+    THEN1 (
+      Cases_on `z' = x \/ z' = y` \\ rw[]
+      THEN1 (disj2_tac \\ disj1_tac \\ rw[])
+      THEN1 (disj2_tac \\ disj2_tac \\ rw[])
+      THEN1 (
+        fs[]
+        \\ disj1_tac
+        \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
+        \\ qexists_tac `z'` \\ rw[]
+        \\ match_mp_tac ((CONJUNCT1 o SPEC_ALL) tc_rules)
+        \\ rw[DELE_def]
+      )
+    )
+  )
+QED
+
 (*
 Theorem CONNECTED_SPLIT:
   !G x y. GRAPH G /\ CONNECTED G /\ (x,y) IN G ==>
