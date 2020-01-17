@@ -395,7 +395,7 @@ Proof
   \\ qexists_tac `n` \\ rw[tc_rules]
 QED
 
-Theorem PATH_SPLIT[local]:
+Theorem PATH_SPLIT0[local]:
   !G z w. (z,w) IN tc G ==>
           !x y. (x,y) IN G /\ w <> y /\ w <> x ==>
                 (z,w) IN tc (DELE (x,y) G) \/
@@ -431,6 +431,11 @@ Proof
   )
 QED
 
+Theorem PATH_SPLIT[local] = PROVE[PATH_SPLIT0]
+  ``!G x y z. (x,z) IN tc G /\ (x,y) IN G /\ x <> z /\ y <> z ==>
+              (x,z) IN tc (DELE (x,y) G) \/
+              (y,z) IN tc (DELE (x,y) G)``
+
 Theorem CONNECTED_SPLIT:
   !G x y. GRAPH G /\ CONNECTED G /\ (x,y) IN G /\ x <> y ==>
           DELE (x,y) G = REACH x (DELE (x,y) G) UNION REACH y (DELE (x,y) G)
@@ -448,40 +453,26 @@ Proof
          (fs[DELE_def] \\ metis_tac[]) \\ rw[]
       THEN1 (
         simp[REACH_def]
-        \\ `(x,v) IN tc G` by (
-             `(v,u) IN G` by fs[GRAPH_def,DELE_def]
-             \\ fs[CONNECTED_def]
-             \\ first_assum irule
-             \\ rw[NODES_def]
-             THEN1 (qexists_tac `(x,y)` \\ rw[])
-             THEN1 (qexists_tac `(v,u)` \\ rw[] \\ fs[GRAPH_def])
-           )
-        \\ mp_tac (Q.SPECL [`G`,`x`,`v`] PATH_SPLIT)
-        \\ disch_then (fn th => first_assum (mp_tac o MATCH_MP th))
-        \\ disch_then (mp_tac o Q.SPECL [`x`,`y`])
-        \\ disch_then (mp_tac o REWRITE_RULE[GSYM AND_IMP_INTRO])
-        \\ rpt (disch_then (fn th => first_assum (mp_tac o MATCH_MP th)))
-        \\ metis_tac[]
+        \\ match_mp_tac PATH_SPLIT \\ rw[]
+        \\ `(v,u) IN G` by fs[GRAPH_def,DELE_def]
+        \\ full_simp_tac std_ss [CONNECTED_def]
+        \\ first_assum irule
+        \\ rw[NODES_def]
+        THEN1 (qexists_tac `(x,y)` \\ rw[])
+        THEN1 (qexists_tac `(v,u)` \\ rw[] \\ fs[GRAPH_def])
       )
       THEN1 (
         `(v,u) IN REACH x (DELE (x,y) G) \/ (v,u) IN REACH y (DELE (x,y) G)`
           suffices_by metis_tac[GRAPH_REACH,GRAPH_CONV_THMS,GRAPH_def]
         \\ `(v,u) IN DELE (x,y) G` by metis_tac[GRAPH_CONV_THMS,GRAPH_def]
         \\ simp[REACH_def]
-        \\ `(x,u) IN tc G` by (
-             `(u,v) IN G` by fs[DELE_def]
-             \\ fs[CONNECTED_def]
-             \\ first_assum irule
-             \\ rw[NODES_def]
-             THEN1 (qexists_tac `(x,y)` \\ rw[])
-             THEN1 (qexists_tac `(u,v)` \\ rw[] \\ fs[GRAPH_def])
-           )
-        \\ mp_tac (Q.SPECL [`G`,`x`,`u`] PATH_SPLIT)
-        \\ disch_then (fn th => first_assum (mp_tac o MATCH_MP th))
-        \\ disch_then (mp_tac o Q.SPECL [`x`,`y`])
-        \\ disch_then (mp_tac o REWRITE_RULE[GSYM AND_IMP_INTRO])
-        \\ rpt (disch_then (fn th => first_assum (mp_tac o MATCH_MP th)))
-        \\ metis_tac[]
+        \\ match_mp_tac PATH_SPLIT \\ rw[]
+        \\ `(u,v) IN G` by fs[DELE_def]
+        \\ full_simp_tac std_ss [CONNECTED_def]
+        \\ first_assum irule
+        \\ rw[NODES_def]
+        THEN1 (qexists_tac `(x,y)` \\ rw[])
+        THEN1 (qexists_tac `(u,v)` \\ rw[] \\ fs[GRAPH_def])
       )
       THEN1 (simp[REACH_def] \\ disj1_tac \\ rw[tc_rules])
       THEN1 (simp[REACH_def] \\ disj2_tac \\ rw[tc_rules])
