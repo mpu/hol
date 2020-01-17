@@ -431,34 +431,6 @@ Proof
   )
 QED
 
-Theorem PATH_NO_LOOP[local]:
-  !G z w. (z,w) IN tc G ==>
-          !x. (x,x) IN G /\ w <> x ==>
-              (z,w) IN tc (DELE (x,x) G) \/
-              (x,w) IN tc (DELE (x,x) G)
-Proof
-  strip_tac
-  \\ ho_match_mp_tac tc_ind_left \\ rw[]
-  THEN1 rw[tc_rules,DELE_def]
-  THEN1 (
-    first_x_assum (mp_tac o Q.SPECL [`x`])
-    \\ disch_then (mp_tac o REWRITE_RULE[GSYM AND_IMP_INTRO])
-    \\ rpt (disch_then (fn th => first_assum (mp_tac o MATCH_MP th)))
-    \\ reverse strip_tac
-    THEN1 rw[]
-    THEN1 (
-      Cases_on `z' = x`
-      THEN1 rw[]
-      THEN1 (
-        disj1_tac
-        \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
-        \\ qexists_tac `z'`
-        \\ rw[tc_rules,DELE_def]
-      )
-    )
-  )
-QED
-
 Theorem CONNECTED_SPLIT:
   !G x y. GRAPH G /\ CONNECTED G /\ (x,y) IN G /\ x <> y ==>
           DELE (x,y) G = REACH x (DELE (x,y) G) UNION REACH y (DELE (x,y) G)
@@ -470,46 +442,6 @@ Proof
     rw[SUBSET_DEF]
     \\ Cases_on `x'`
     \\ rename [`(u,v) IN DELE _ _`]
-    (*
-    \\ Cases_on `x = y`
-    THEN1 (
-      rw[]
-      \\ `u <> x \/ v <> x` by (fs[DELE_def] \\ metis_tac[])
-      THEN1 (
-        `(v,u) IN REACH x (DELE (x,x) G)` suffices_by
-           metis_tac[GRAPH_REACH,GRAPH_CONV_THMS,GRAPH_def]
-        \\ `(v,u) IN DELE (x,x) G` by metis_tac[GRAPH_CONV_THMS,GRAPH_def]
-        \\ simp[REACH_def]
-        \\ `(x,u) IN tc G` by (
-             `(u,v) IN G` by fs[DELE_def]
-             \\ fs[CONNECTED_def]
-             \\ first_assum irule
-             \\ rw[NODES_def]
-             THEN1 (qexists_tac `(x,x)` \\ rw[])
-             THEN1 (qexists_tac `(u,v)` \\ rw[] \\ fs[GRAPH_def])
-           )
-        \\ mp_tac (Q.SPECL [`G`,`x`,`u`] PATH_NO_LOOP)
-        \\ disch_then (fn th => first_assum (mp_tac o MATCH_MP th))
-        \\ disch_then (mp_tac o Q.SPEC `x`)
-        \\ simp[]
-      )
-      THEN1 (
-        simp[REACH_def]
-        \\ `(x,v) IN tc G` by (
-             `(v,u) IN G` by fs[GRAPH_def,DELE_def]
-             \\ fs[CONNECTED_def]
-             \\ first_assum irule
-             \\ rw[NODES_def]
-             THEN1 (qexists_tac `(x,x)` \\ rw[])
-             THEN1 (qexists_tac `(v,u)` \\ rw[] \\ fs[GRAPH_def])
-           )
-        \\ mp_tac (Q.SPECL [`G`,`x`,`v`] PATH_NO_LOOP)
-        \\ disch_then (fn th => first_assum (mp_tac o MATCH_MP th))
-        \\ disch_then (mp_tac o Q.SPEC `x`)
-        \\ simp[]
-      )
-    )
-    *)
     THEN1 (
       `(v <> x /\ v <> y) \/ (u <> x /\ u <> y) \/
        (u = x /\ v = x) \/ (u = y /\ v = y)` by
@@ -647,13 +579,11 @@ Proof
          \\ rw[NODES_def]
          \\ qexists_tac `(u,v)` \\ fs[DELE_def]
        )
-    \\ first_assum (mp_tac o MATCH_MP (Q.SPECL [`G`,`x`,`u`] PATH_NO_LOOP))
-    \\ disch_then (qspec_then `x` mp_tac)
-    \\ simp[]
-    \\ disch_then (fn th =>
-         `?w. (x,w) IN DELE (x,x) G` by metis_tac[tc_cases_left,th])
+    \\ `(x,u) IN tc (G DELETE (x,x))` by rw[PATH_NO_LOOP']
+    \\ pop_assum (fn th =>
+         `?w. (x,w) IN G DELETE (x,x)` by metis_tac[tc_cases_left,th])
     \\ rw[NODES_def]
-    \\ qexists_tac `(x,w)` \\ rw[]
+    \\ qexists_tac `(x,w)` \\ rw[DELE_def]
   )
   THEN1 (
     fs[NODES_def]
@@ -701,7 +631,7 @@ Proof
   THEN1 (
     (* base case: graph is a single edge (x,y) *)
     last_assum kall_tac
-    \\ `G = {} \/ G = GRAPH1 (x,y)` by rw[DELE_EMPTY_CASES] (* TODO: is it possible to not state this? *)
+    \\ `G = {} \/ G = GRAPH1 (x,y)` by rw[DELE_EMPTY_CASES]
     THEN1 fs[NODES_def]
     THEN1 (
       qexists_tac `[]`
