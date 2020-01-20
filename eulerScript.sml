@@ -65,6 +65,15 @@ Proof
   rw[PSUBSET_DEF,DELETE_SUBSET,EXTENSION] \\ metis_tac[]
 QED
 
+Theorem DELE_PSUBSET:
+  !G e. e IN G ==> DELE e G PSUBSET G
+Proof
+  Cases_on `e` \\ rw[DELE_def]
+  \\ match_mp_tac SUBSET_PSUBSET_TRANS
+  \\ qexists_tac `G DELETE (q,r)`
+  \\ rw[DELETE_PSUBSET]
+QED
+
 Theorem GRAPH_INDUCT:
   !P. P {} /\ (!G x y. GRAPH G /\ P G /\ (x,y) NOTIN G ==> P (ADDE (x,y) G)) ==>
       !G. GRAPH G ==> P G
@@ -82,10 +91,7 @@ Proof
     \\ pop_assum SUBST1_TAC
     \\ last_x_assum match_mp_tac \\ reverse (rw[])
     THEN1 rw[DELE_def]
-    THEN1 (
-      first_x_assum match_mp_tac \\ rw[]
-      \\ metis_tac[DELE_def,DELETE_PSUBSET,DELETE_SUBSET,SUBSET_PSUBSET_TRANS]
-    )
+    THEN1 (first_x_assum match_mp_tac \\ rw[DELE_PSUBSET])
   )
 QED
 
@@ -105,7 +111,7 @@ QED
    undirected edge *)
 Inductive CIRCUIT:
   (CIRCUIT x [] z) /\
-  (~((x,y) IN PAIRS y l z) /\ CIRCUIT y l z ==> CIRCUIT x (y::l) z)
+  ((x,y) NOTIN PAIRS y l z /\ CIRCUIT y l z ==> CIRCUIT x (y::l) z)
 End
 
 Definition NEIGHB_def:
@@ -139,7 +145,7 @@ Proof rw[ADDE_def] \\ eq_tac \\ rw[]
 QED
 
 Theorem DEG_ADDE:
-  !x y z G. GRAPH G /\ ~((y,z) IN G) ==>
+  !x y z G. GRAPH G /\ (y,z) NOTIN G ==>
             DEG x (ADDE (y,z) G) = DEG x (GRAPH1 (y,z)) + DEG x G
 Proof
   simp[DEG_def]
@@ -260,7 +266,8 @@ QED
 
 Theorem IN_NODES:
   !G x. x IN NODES G ==> ?y. (x,y) IN G
-Proof rw[NODES_def] \\ metis_tac[PAIR,SND,FST]
+Proof
+  rw[NODES_def] \\ qexists_tac `SND x'` \\ rw[PAIR]
 QED
 
 Definition CONNECTED_def:
@@ -290,29 +297,6 @@ Proof
   )
 QED
 
-Theorem CONNECTED_DELE:
-  !G x y. GRAPH G /\ CONNECTED G /\ (x,y) IN tc (DELE (x,y) G) ==>
-          CONNECTED (DELE (x,y) G)
-Proof
-  rpt strip_tac \\ rw[CONNECTED_def]
-  \\ `!n. n IN NODES (DELE (x,y) G) ==> n IN NODES G`
-       by (rw[DELE_def,NODES_def] \\ metis_tac[])
-  \\ `(x',y') IN tc G` by fs[CONNECTED_def]
-  \\ pop_assum mp_tac
-  \\ ntac 4 (pop_assum kall_tac)
-  \\ map_every qid_spec_tac [`y'`,`x'`]
-  \\ ho_match_mp_tac tc_ind \\ rw[tc_rules]
-  \\ `(y,x) IN tc (DELE (x,y) G)` by
-       metis_tac[GRAPH_TC,GRAPH_CONV_THMS,GRAPH_def]
-  \\ Cases_on `(x',y') <> (x,y) /\ (x',y') <> (y,x)`
-  THEN1 (
-    simp[DELE_def]
-    \\ rename[`_ <> xy /\ _ <> yx`]
-    \\ rw[tc_rules]
-  )
-  THEN1 (rw[] \\ rw[])
-QED
-
 Theorem DELE_EMPTY_CASES:
   !G x y. GRAPH G /\ DELE (x,y) G = {} ==> (G = {} \/ G = GRAPH1 (x,y))
 Proof
@@ -337,7 +321,7 @@ Proof
   THEN1 (
     rw[REACH_def]
     \\ eq_tac \\ rw[]
-    \\ match_mp_tac ((CONJUNCT2 o Q.SPEC `G`) tc_rules)
+    \\ match_mp_tac (CONJUNCT2 (SPEC_ALL tc_rules))
     THEN1 (qexists_tac `y` \\ rw[tc_rules])
     THEN1 (qexists_tac `x` \\ rw[tc_rules])
   )
@@ -362,7 +346,7 @@ Proof
   \\ simp[]
   \\ `(x,z) IN tc G /\ (y,z) IN G` by fs[REACH_def]
   \\ `(x,y) IN tc G` by metis_tac[GRAPH_def,tc_rules]
-  \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
+  \\ match_mp_tac (CONJUNCT2 (SPEC_ALL tc_rules))
   \\ qexists_tac `y` \\ rw[tc_rules]
   \\ pop_assum mp_tac
   \\ ntac 3 (pop_assum kall_tac)
@@ -373,11 +357,11 @@ Proof
   THEN1 rw[tc_rules,REACH_def]
   THEN1 (
     rename [`(y,z) IN G`,`(x,y) IN tc _`]
-    \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
+    \\ match_mp_tac (CONJUNCT2 (SPEC_ALL tc_rules))
     \\ qexists_tac `y` \\ rw[tc_rules]
-    \\ match_mp_tac ((CONJUNCT1 o SPEC_ALL) tc_rules)
+    \\ match_mp_tac (CONJUNCT1 (SPEC_ALL tc_rules))
     \\ rw[REACH_def]
-    \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
+    \\ match_mp_tac (CONJUNCT2 (SPEC_ALL tc_rules))
     \\ qexists_tac `y` \\ rw[tc_rules]
     \\ irule (CONV_RULE (RAND_CONV (REWR_CONV SUBSET_DEF)) tc_mono)
     \\ qexists_tac `REACH x G`
@@ -390,9 +374,8 @@ Theorem CONNECTED_REACH:
 Proof
   rw[CONNECTED_def]
   \\ imp_res_tac IN_NODES_REACH
-  \\ `(x,n) IN tc (REACH n G)` by metis_tac[GRAPH_def,GRAPH_TC,GRAPH_REACH]
-  \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
-  \\ qexists_tac `n` \\ rw[tc_rules]
+  \\ `GRAPH (tc (REACH n G))` by rw[GRAPH_REACH,GRAPH_TC]
+  \\ metis_tac[tc_rules,GRAPH_def]
 QED
 
 Theorem PATH_SPLIT0[local]:
@@ -423,7 +406,7 @@ Proof
       THEN1 (
         fs[]
         \\ disj1_tac
-        \\ match_mp_tac ((CONJUNCT2 o SPEC_ALL) tc_rules)
+        \\ match_mp_tac (CONJUNCT2 (SPEC_ALL tc_rules))
         \\ qexists_tac `z'` \\ rw[]
         \\ rw[DELE_def,tc_rules]
       )
@@ -516,7 +499,7 @@ Proof
   THEN1 (rw[ADDE_DELE])
 QED
 
-Theorem PATH_NO_LOOP'[local]:
+Theorem PATH_NO_LOOP[local]:
   !G u x y. (x,y) IN tc G /\ y <> u ==> (x,y) IN tc (G DELETE (u,u))
 Proof
   ntac 2 gen_tac
@@ -546,9 +529,22 @@ Proof
   THEN1 (
     `(y,x) IN tc G ==> (y,x) IN tc (DELE (u,u) G)` suffices_by 
       metis_tac[GRAPH_def,GRAPH_TC,GRAPH_CONV_THMS]
-    \\ rw[PATH_NO_LOOP',DELE_def]
+    \\ rw[PATH_NO_LOOP,DELE_def]
   )
-  THEN1 rw[PATH_NO_LOOP',DELE_def]
+  THEN1 rw[PATH_NO_LOOP,DELE_def]
+QED
+
+Theorem REACH_EQ:
+  !G x y. GRAPH G /\ REACH x G INTER REACH y G <> {} ==>
+          REACH x G = REACH y G
+Proof
+  rpt strip_tac
+  \\ `?e. e IN REACH x G /\ e IN REACH y G`
+     by (qexists_tac`CHOICE (REACH x G INTER REACH y G)`
+         \\ simp[GSYM IN_INTER,CHOICE_DEF])
+  \\ qpat_x_assum `_ INTER _ <> {}` kall_tac
+  \\ fs[REACH_def,EXTENSION]
+  \\ metis_tac[tc_rules,GRAPH_def,GRAPH_TC,FST,SND,PAIR]
 QED
 
 Theorem LOOP_EULER_LEMMA[local]:
@@ -570,7 +566,7 @@ Proof
          \\ rw[NODES_def]
          \\ qexists_tac `(u,v)` \\ fs[DELE_def]
        )
-    \\ `(x,u) IN tc (G DELETE (x,x))` by rw[PATH_NO_LOOP']
+    \\ `(x,u) IN tc (G DELETE (x,x))` by rw[PATH_NO_LOOP]
     \\ pop_assum (fn th =>
          `?w. (x,w) IN G DELETE (x,x)` by metis_tac[tc_cases_left,th])
     \\ rw[NODES_def]
@@ -602,6 +598,83 @@ Proof
          suffices_by rw[]
     \\ rw[NEIGHB_def,DELE_def,EXTENSION]
   )
+QED
+
+Theorem DEG_PARITY_DELE:
+  !G x y u. GRAPH G /\ (x,y) IN G ==>
+            (EVEN (DEG u (DELE (x,y) G)) <=>
+             if (x = u \/ y = u) /\ x <> y
+             then ~EVEN (DEG u G) else EVEN (DEG u G))
+Proof
+  rpt strip_tac
+  \\ Cases_on `x = y`
+  THEN1 (
+    rw[]
+    \\ Cases_on `x = u`
+    THEN1 (
+      rw[]
+      \\ `DEG u G = DEG u (DELE (u,u) G) + 2` suffices_by rw[EVEN_ADD]
+      \\ rw[DEG_def] \\ TRY (fs[DELE_def] \\ NO_TAC)
+      \\ `NEIGHB u G = u INSERT NEIGHB u (DELE (u,u) G) /\
+          u NOTIN NEIGHB u (DELE (u,u) G)`
+           suffices_by rw[]
+      \\ rw[] 
+      THEN1 (rw[NEIGHB_def,DELE_def,EXTENSION] \\ metis_tac[])
+      THEN1 (rw[NEIGHB_def,DELE_def])
+    )
+    THEN1 (
+      `(u,u) IN DELE (x,x) G <=> (u,u) IN G`
+        by (simp[DELE_def] \\ metis_tac[])
+      \\ rw[DEG_def,NEIGHB_def,DELE_def,EXTENSION]
+    )
+  )
+  THEN1 (
+    `!v. (v,v) IN DELE (x,y) G <=> (v,v) IN G`
+       by (simp[DELE_def] \\ metis_tac[])
+    \\ Cases_on `(x = u \/ y = u) /\ x <> y`
+    \\ simp[DEG_def,EVEN_ADD]
+    THEN1 (
+      `CARD (NEIGHB u G) = CARD (NEIGHB u (DELE (x,y) G)) + 1`
+        suffices_by (rw[EVEN_ADD] \\ metis_tac[])
+      \\ `?v. v NOTIN (NEIGHB u (DELE (x,y) G)) /\
+                NEIGHB u G = v INSERT NEIGHB u (DELE (x,y) G)`
+           suffices_by (rw[] \\ rw[])
+      \\ fs[] \\ rw[NEIGHB_def,DELE_def,EXTENSION]
+      THEN1 (qexists_tac `y` \\ metis_tac[])
+      THEN1 (qexists_tac `x` \\ metis_tac[GRAPH_def])
+    )
+    THEN1 (
+      fs[]
+      \\ `NEIGHB u G = NEIGHB u (DELE (x,y) G)`
+           suffices_by (rw[EVEN_ADD] \\ metis_tac[])
+      \\ rw[NEIGHB_def,DELE_def,EXTENSION]
+    )
+  )
+QED
+
+Theorem REACH_NON_EMPTY:
+  !G x. REACH x G <> {} <=> x IN NODES G
+Proof
+  rw[] \\ eq_tac \\ strip_tac
+  THEN1 (
+    first_assum (mp_tac o MATCH_MP CHOICE_DEF)
+    \\ rename [`e IN REACH _ _`]
+    \\ simp[REACH_def,Once tc_cases_left]
+    \\ strip_tac \\ simp[NODES_def]
+    THEN1 (qexists_tac `(x,SND e)` \\ rw[])
+    THEN1 (qexists_tac `(x,z)` \\ rw[])
+  )
+  THEN1 (
+    fs[NODES_def]
+    \\ simp[EXTENSION]
+    \\ qexists_tac `x'`
+    \\ rw[REACH_def,tc_rules]
+  )
+QED
+
+Theorem NEIGHB_SUBSET_REACH:
+  !G x u. IMAGE (\n. (x,n)) (NEIGHB x G) SUBSET REACH x G
+Proof
 QED
 
 (*
@@ -638,13 +711,14 @@ Proof
     )
   )
   THEN1 (
-    Cases_on `x = y`
+    `DELE (x,y) G PSUBSET G` by rw[DELE_PSUBSET]
+    \\ fs[ODD_EVEN]
+    \\ Cases_on `x = y`
     THEN1 (
-      rw[] \\ fs[ODD_EVEN]
+      rw[]
       \\ `?l. CIRCUIT_OF (DELE (x,x) G) x l z`
            suffices_by (metis_tac[CIRCUIT_OF_DELE])
-      \\ first_x_assum (mp_tac o Q.SPEC `DELE (x,x) G`)
-      \\ `DELE (x,x) G PSUBSET G` by rw[DELE_def,DELETE_PSUBSET]
+      \\ last_x_assum (mp_tac o Q.SPEC `DELE (x,x) G`)
       \\ `CONNECTED (DELE (x,x) G)` by rw[CONNECTED_DELE_LOOP]
       \\ simp[]
       \\ disch_then match_mp_tac
@@ -652,31 +726,77 @@ Proof
       \\ simp[]
     )
     THEN1 (
-    (* Split the graph in two, X = REACH x G' and Y = REACH y G'
-       where G' = DELE (x,y) G; then G = ADDE (x,y) (X UNION Y);
-       and apply the induction hypotheses on X and Y *)
-
-    (* Need a case analysis to know which of x,y,z are equal *)
-    (* If x = y we should be able to apply the induction hypothesis
-       on G' directly and connect x -- x to x --* z *)
-    (* If x <> y we split G' = REACH x G' UNION REACH y G';
-       each component is connected and satisfies the hypotheses
-       so we can build x --* x and connect it to y --* z *)
-
-      cheat
-    )
-
-    (* Might be useful
-     --
-    `G = ADDE (x,y) (DELE (x,y) G)` by rw[ADDE_DELE]
-    \\ pop_assum SUBST1_TAC
-    \\ qmatch_abbrev_tac `?l. CIRCUIT_OF (ADDE _ G') x l z`
-    \\ `(?l. CIRCUIT_OF G' y l z) ==> ?l. CIRCUIT_OF (ADDE (x,y) G') x l z`
-         by (strip_tac \\ qexists_tac `y::l`
-             \\ rw[Abbr`G'`,CIRCUIT_OF_ADDE,DELE_def])
-    \\ pop_assum match_mp_tac
-    *)
-  )
+      `DELE (x,y) G = REACH x (DELE (x,y) G) UNION REACH y (DELE (x,y) G)`
+        by rw[CONNECTED_SPLIT]
+      \\ (Cases_on `REACH x (DELE (x,y) G) = {}`
+          \\ Cases_on `REACH y (DELE (x,y) G) = {}`
+          \\ fs[])
+      (* -- x is only connected to y; build a circuit x -- y --* z *)
+      THEN1 (
+        `?l. CIRCUIT_OF (DELE (x,y) G) y l z`
+           suffices_by (metis_tac[CIRCUIT_OF_DELE])
+        \\ last_x_assum (qspec_then `DELE (x,y) G` mp_tac)
+        \\ `CONNECTED (DELE (x,y) G)`
+             by (qpat_assum `DELE _ _ = REACH _ _` SUBST1_TAC
+                 \\ simp[CONNECTED_REACH])
+        \\ simp[]
+        \\ disch_then match_mp_tac
+        \\ `y IN NODES (DELE (x,y) G)` by rw[GSYM REACH_NON_EMPTY]
+        \\ simp[]
+        \\ reverse conj_tac
+        THEN1 metis_tac[DEG_PARITY_DELE]
+        THEN1 (
+          (* here we show that z IN NODES (REACH y (DELE (x,y) G)) *)
+          Cases_on `z = x`
+          THEN1 ( (* z cannot be x *)
+            rw[GSYM REACH_NON_EMPTY]
+            \\ `NEIGHB x (DELE (x,y) G) = {}` suffices_by (
+                 `ODD (DEG x (DELE (x,y) G))` by rw[ODD_EVEN,DEG_PARITY_DELE]
+                 \\ strip_tac \\ fs[DEG_def]
+                 \\ Cases_on `(x,x) IN DELE (x,y) G`
+                 THEN1 (fs[NEIGHB_def,EXTENSION] \\ metis_tac[])
+                 THEN1 fs[]
+               )
+            \\ rw[NEIGHB_def,EXTENSION] \\ strip_tac
+            \\ `(x,x') IN REACH x (DELE (x,y) G)`
+                 by (qpat_x_assum `REACH x _ = {}` kall_tac
+                     \\ rw[REACH_def,tc_rules])
+            \\ fs[EXTENSION] \\ metis_tac[]
+          )
+          THEN1 (
+            Cases_on `z = y`
+            THEN1 rw[]
+            THEN1 (
+              `?z'. (z,z') IN G` by rw[IN_NODES]
+              \\ simp[NODES_def,DELE_def]
+              \\ qexists_tac `(z,z')` \\ rw[]
+            )
+          )
+        )
+      )
+      (* -- y is only connected to x; it must be that y = z *)
+      THEN1 (
+        reverse (Cases_on `y = z`)
+        THEN1 ( (* y <> z; that is impossible *)
+           `NEIGHB y (DELE (x,y) G) = {}` suffices_by (
+              strip_tac
+              \\ `EVEN (DEG y G)` by metis_tac[]
+              \\ `ODD (DEG y (DELE (x,y) G))` by rw[ODD_EVEN,DEG_PARITY_DELE]
+              \\ pop_assum mp_tac
+              \\ simp[DEG_def]
+              \\ Cases_on `(y,y) IN DELE (x,y) G`
+              THEN1 (fs[NEIGHB_def,EXTENSION] \\ metis_tac[])
+              THEN1 fs[]
+           )
+           \\ rw[NEIGHB_def,EXTENSION] \\ strip_tac
+           \\ `(y,x') IN REACH y (DELE (x,y) G)`
+                 by (qpat_x_assum `REACH y _ = {}` kall_tac
+                     \\ rw[REACH_def,tc_rules])
+            \\ fs[EXTENSION] \\ metis_tac[]
+        )
+        THEN1 (
+          (* build a circuit x --* x -- y *)
+          rw[] \\ full_simp_tac std_ss []
 QED
 *)
 
@@ -716,6 +836,29 @@ Proof
   \\ `!x y. (x,y) IN (ADDE e G) <=> (x,y) IN G` by
        (Cases_on `e` \\ rw[IN_ADDE] \\ metis_tac[GRAPH_def])
   \\ rw[DEG_def,NEIGHB_def]
+QED
+
+Theorem CONNECTED_DELE:
+  !G x y. GRAPH G /\ CONNECTED G /\ (x,y) IN tc (DELE (x,y) G) ==>
+          CONNECTED (DELE (x,y) G)
+Proof
+  rpt strip_tac \\ rw[CONNECTED_def]
+  \\ `!n. n IN NODES (DELE (x,y) G) ==> n IN NODES G`
+       by (rw[DELE_def,NODES_def] \\ metis_tac[])
+  \\ `(x',y') IN tc G` by fs[CONNECTED_def]
+  \\ pop_assum mp_tac
+  \\ ntac 4 (pop_assum kall_tac)
+  \\ map_every qid_spec_tac [`y'`,`x'`]
+  \\ ho_match_mp_tac tc_ind \\ rw[tc_rules]
+  \\ `(y,x) IN tc (DELE (x,y) G)` by
+       metis_tac[GRAPH_TC,GRAPH_CONV_THMS,GRAPH_def]
+  \\ Cases_on `(x',y') <> (x,y) /\ (x',y') <> (y,x)`
+  THEN1 (
+    simp[DELE_def]
+    \\ rename[`_ <> xy /\ _ <> yx`]
+    \\ rw[tc_rules]
+  )
+  THEN1 (rw[] \\ rw[])
 QED
 *)
 
