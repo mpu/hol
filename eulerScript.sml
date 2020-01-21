@@ -45,18 +45,34 @@ Proof
   THEN Cases_on `e` \\ rw[ADDE_def,DELE_def] \\ metis_tac[]
 QED
 
+Theorem ADDE_UNION:
+  !G x y. ADDE (x,y) G = GRAPH1 (x,y) UNION G
+Proof
+  simp[ADDE_def,GRAPH1_def,INSERT_UNION_EQ]
+QED
+
 Theorem ADDE_DELE:
   !G x y. GRAPH G /\ (x,y) IN G ==> ADDE (x,y) (DELE (x,y) G) = G
 Proof
-  rw[ADDE_def,DELE_def]
-  \\ Cases_on `(x,y) = (y,x)`
-  THEN1 (rw[] \\ rw[INSERT_DELETE])
-  THEN1 (
-    `(y,x) IN G` by fs[GRAPH_def]
-    \\ qmatch_abbrev_tac `_ INSERT (_ INSERT INNER DELETE _) = _`
-    \\ `(y,x) IN INNER` by rw[Abbr`INNER`,IN_DELETE]
-    \\ rw[Abbr`INNER`,INSERT_DELETE]
-  )
+  rw[GRAPH_def,ADDE_def,DELE_def,EXTENSION] \\ metis_tac[]
+QED
+
+Theorem DELE_ADDE:
+  !G x y. GRAPH G /\ (x,y) NOTIN G ==> DELE (x,y) (ADDE (x,y) G) = G
+Proof
+  rw[GRAPH_def,ADDE_def,DELE_def,EXTENSION] \\ metis_tac[]
+QED
+
+Theorem DELE_DELE:
+  !G a b c d. DELE (a,b) (DELE (c,d) G) = DELE (c,d) (DELE (a,b) G)
+Proof
+  rw[DELE_def,EXTENSION] \\ metis_tac[]
+QED
+
+Theorem ADDE_ADDE:
+  !G a b c d. ADDE (a,b) (ADDE (c,d) G) = ADDE (c,d) (ADDE (a,b) G)
+Proof
+  rw[ADDE_def,EXTENSION] \\ metis_tac[]
 QED
 
 Theorem DELETE_PSUBSET:
@@ -486,19 +502,6 @@ Proof
   simp[DEG_def,NEIGHB_def,IN_REACH_LEMMA]
 QED
 
-Definition CIRCUIT_OF_def:
-  CIRCUIT_OF G x l z = (CIRCUIT x l z /\ G = PAIRS x l z)
-End
-
-Theorem CIRCUIT_OF_DELE:
-  !G x y l z. GRAPH G /\ (x,y) IN G /\ CIRCUIT_OF (DELE (x,y) G) y l z ==>
-              CIRCUIT_OF G x (y::l) z
-Proof
-  rw[CIRCUIT_OF_def] \\ first_x_assum (strip_assume_tac o GSYM)
-  THEN1 (rw[CIRCUIT_rules,DELE_def])
-  THEN1 (rw[ADDE_DELE])
-QED
-
 Theorem PATH_NO_LOOP[local]:
   !G u x y. (x,y) IN tc G /\ y <> u ==> (x,y) IN tc (G DELETE (u,u))
 Proof
@@ -672,9 +675,82 @@ Proof
   )
 QED
 
-Theorem NEIGHB_SUBSET_REACH:
-  !G x u. IMAGE (\n. (x,n)) (NEIGHB x G) SUBSET REACH x G
+Definition CIRCUIT_OF_def:
+  CIRCUIT_OF G x l z = (CIRCUIT x l z /\ G = PAIRS x l z)
+End
+
+Theorem PAIRS_APPEND:
+  !l1 l2 x y z. PAIRS x (l1 ++ [y] ++ l2) z = PAIRS x l1 y UNION PAIRS y l2 z
 Proof
+  Induct \\ rw[GRAPH1_def,ADDE_def,INSERT_UNION_EQ]
+QED
+
+Theorem CIRCUIT_APPEND:
+  !G1 G2 l1 l2 x y z.
+    GRAPH G1 /\ GRAPH G2 /\ DISJOINT G1 G2 /\
+    CIRCUIT_OF G1 x l1 y /\ CIRCUIT_OF G2 y l2 z ==>
+    CIRCUIT_OF (G1 UNION G2) x (l1 ++ [y] ++ l2) z
+Proof
+  Induct_on `l1`
+  THEN1 (
+    rw[CIRCUIT_OF_def]
+    THEN1 (
+      irule (CONJUNCT2 CIRCUIT_rules) \\ simp[]
+      \\ qspecl_then [`GRAPH1 (x,y)`,`PAIRS y l2 z`] mp_tac DISJOINT_ALT
+      \\ simp[GRAPH1_def]
+    )
+    THEN1 simp[GRAPH1_def,ADDE_def,INSERT_UNION_EQ]
+  )
+  THEN1 (
+    reverse (rw[CIRCUIT_OF_def])
+    THEN1 simp[PAIRS_APPEND,ADDE_def,INSERT_UNION_EQ]
+    THEN1 (
+      `CIRCUIT_OF (PAIRS h l1 y UNION PAIRS y l2 z) h (l1 ++ [y] ++ l2) z` by (
+        first_x_assum irule
+        \\ simp[GRAPH_PAIRS,CIRCUIT_OF_def]
+        \\ conj_tac
+        THEN1 fs[ADDE_def,DISJOINT_INSERT]
+        THEN1 fs[Once CIRCUIT_cases]
+      )
+      \\ ntac 3 (last_x_assum kall_tac)
+      \\ irule (CONJUNCT2 CIRCUIT_rules)
+      \\ reverse conj_tac
+      THEN1 fs[CIRCUIT_OF_def]
+      THEN1 (
+        simp[PAIRS_APPEND]
+        \\ fs[ADDE_def,DISJOINT_INSERT]
+        \\ fs[Once CIRCUIT_cases]
+      )
+    )
+  )
+QED
+
+Theorem CIRCUIT_ADD_BEG:
+  !G x y l z. GRAPH G /\ (x,y) IN G /\ CIRCUIT_OF (DELE (x,y) G) y l z ==>
+              CIRCUIT_OF G x (y::l) z
+Proof
+  rw[CIRCUIT_OF_def] \\ first_x_assum (strip_assume_tac o GSYM)
+  THEN1 (rw[CIRCUIT_rules,DELE_def])
+  THEN1 (rw[ADDE_DELE])
+QED
+
+Theorem CIRCUIT_ADD_END:
+  !G x y l z. GRAPH G /\ (y,z) IN G /\ CIRCUIT_OF (DELE (y,z) G) x l y ==>
+              CIRCUIT_OF G x (l ++ [y]) z
+Proof
+  rw[]
+  \\ qspecl_then [`DELE (y,z) G`,`GRAPH1 (y,z)`,`l`,`[]`]
+                 mp_tac CIRCUIT_APPEND
+  \\ `DELE (y,z) G UNION GRAPH1 (y,z) = G`
+       by (simp[Once UNION_COMM] \\ simp[GSYM ADDE_UNION,ADDE_DELE])
+  \\ simp[]
+  \\ disch_then match_mp_tac
+  \\ rw[]
+  THEN1 (
+    simp[Once DISJOINT_SYM]
+    \\ simp[GRAPH1_def,DISJOINT_INSERT,DELE_def]
+  )
+  THEN1 simp[CIRCUIT_OF_def,CIRCUIT_rules]
 QED
 
 (*
