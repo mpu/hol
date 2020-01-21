@@ -120,7 +120,8 @@ End
 
 Theorem GRAPH_PAIRS[simp]:
   !l x z. GRAPH (PAIRS x l z)
-Proof Induct \\ rw[]
+Proof
+  Induct \\ rw[]
 QED
 
 (* A circuit is a path that does not go twice by the same
@@ -186,25 +187,33 @@ Theorem EULER0:
   !x l z.
     CIRCUIT x l z ==>
     let G = PAIRS x l z in
-    (!y. y <> x /\ y <> z ==> EVEN (DEG y G)) /\
-    if x = z then EVEN (DEG x G) else ODD (DEG x G) /\ ODD (DEG z G)
+    (if z = x
+     then (!v. EVEN (DEG v G))
+     else (ODD (DEG x G) /\ ODD (DEG z G) /\
+          (!v. v <> x /\ v <> z ==> EVEN (DEG v G))))
 Proof
   ho_match_mp_tac CIRCUIT_ind
   \\ conj_tac
   (* empty list *)
-  THEN1 rw[DEG_GRAPH1]
+  THEN1 (rw[DEG_GRAPH1] \\ rw[])
   THEN1 (
     (* non-empty list *)
     qx_genl_tac [`l`,`x`,`y`,`z`]
     \\ strip_tac \\ pop_assum mp_tac
     \\ simp[ODD_EVEN,DEG_ADDE,EVEN_ADD]
-    \\ rw[] \\ rw[DEG_ADDE,DEG_GRAPH1,EVEN_ADD] \\ rw[]
+    \\ rw[] \\ rw[DEG_ADDE,DEG_GRAPH1,EVEN_ADD] \\ fs[]
   )
 QED
 
 Definition NODES_def:
   NODES G = IMAGE FST G
 End
+
+Theorem FINITE_NODES:
+  !G. GRAPH G ==> FINITE (NODES G)
+Proof
+  simp[NODES_def]
+QED
 
 Theorem IN_NODES_DELE:
   !G u v x. x IN NODES (DELE (u,v) G) ==> x IN NODES G
@@ -237,6 +246,16 @@ Proof
     \\ rw[SUM_IMAGE_THM]
   )
   THEN1 rw[DELETE_NON_ELEMENT_RWT]
+QED
+
+Theorem EVEN_SUM_IMAGE:
+  !s f. FINITE s /\ (!x. x IN s ==> EVEN (f x)) ==> EVEN (SIGMA f s)
+Proof
+  CONV_TAC (REWRITE_CONV [GSYM AND_IMP_INTRO] THENC
+            BINDER_CONV FORALL_IMP_CONV)
+  \\ ho_match_mp_tac FINITE_INDUCT
+  \\ rw[SUM_IMAGE_THM,EVEN_ADD]
+  \\ simp[DELETE_NON_ELEMENT_RWT]
 QED
 
 Theorem DEG_NOTIN_NODES:
@@ -380,6 +399,12 @@ Proof
     \\ qexists_tac `REACH x G`
     \\ rw[REACH_SUBSET]
   )
+QED
+
+Theorem CONNECTED_GRAPH1[simp]:
+  !x y. CONNECTED (GRAPH1 (x,y))
+Proof
+  rw[GRAPH1_def,NODES_def,CONNECTED_def] \\ rw[tc_rules]
 QED
 
 Theorem CONNECTED_REACH[simp]:
@@ -791,7 +816,21 @@ Proof
   THEN1 simp[CIRCUIT_OF_def,CIRCUIT_rules]
 QED
 
-(*
+Theorem DISJOINT_NODES_REACH:
+  !G x y v. GRAPH G /\ DISJOINT (REACH x G) (REACH y G) /\
+            v IN NODES (REACH x G) ==>
+            v NOTIN NODES (REACH y G)
+Proof
+  rpt strip_tac
+  \\ `?vx. (v,vx) IN REACH x G /\ ?vy. (v,vy) IN REACH y G` by rw[IN_NODES]
+  \\ qspecl_then [`REACH x G`,`REACH y G`] mp_tac DISJOINT_ALT
+  \\ simp[]
+  \\ qexists_tac `(v,vx)`
+  \\ rw[REACH_def]
+  THEN1 metis_tac[REACH_SUBSET,SUBSET_DEF]
+  THEN1 (fs[REACH_def] \\ metis_tac[GRAPH_def,tc_rules])
+QED
+
 Theorem EULER1:
   !G. GRAPH G /\ CONNECTED G ==>
   !x z. x IN NODES G /\ z IN NODES G /\
@@ -892,21 +931,21 @@ Proof
       THEN1 (
         reverse (Cases_on `y = z`)
         THEN1 ( (* y <> z; that is impossible *)
-           `NEIGHB y (DELE (x,y) G) = {}` suffices_by (
-              strip_tac
-              \\ `EVEN (DEG y G)` by metis_tac[]
-              \\ `ODD (DEG y (DELE (x,y) G))` by rw[ODD_EVEN,DEG_PARITY_DELE]
-              \\ pop_assum mp_tac
-              \\ simp[DEG_def]
-              \\ Cases_on `(y,y) IN DELE (x,y) G`
-              THEN1 (fs[NEIGHB_def,EXTENSION] \\ metis_tac[])
-              THEN1 fs[]
-           )
-           \\ rw[NEIGHB_def,EXTENSION] \\ strip_tac
-           \\ `(y,x') IN REACH y (DELE (x,y) G)`
-                 by (qpat_x_assum `REACH y _ = {}` kall_tac
-                     \\ rw[REACH_def,tc_rules])
-            \\ fs[EXTENSION] \\ metis_tac[]
+          `NEIGHB y (DELE (x,y) G) = {}` suffices_by (
+             strip_tac
+             \\ `EVEN (DEG y G)` by metis_tac[]
+             \\ `ODD (DEG y (DELE (x,y) G))` by rw[ODD_EVEN,DEG_PARITY_DELE]
+             \\ pop_assum mp_tac
+             \\ simp[DEG_def]
+             \\ Cases_on `(y,y) IN DELE (x,y) G`
+             THEN1 (fs[NEIGHB_def,EXTENSION] \\ metis_tac[])
+             THEN1 fs[]
+          )
+          \\ rw[NEIGHB_def,EXTENSION] \\ strip_tac
+          \\ `(y,x') IN REACH y (DELE (x,y) G)`
+                by (qpat_x_assum `REACH y _ = {}` kall_tac
+                    \\ rw[REACH_def,tc_rules])
+          \\ fs[EXTENSION] \\ metis_tac[]
         )
         THEN1 (
           (* build a circuit x --* x -- y *)
@@ -962,8 +1001,55 @@ Proof
         )
         THEN1 (
           (* the two reachable graphs are disjoint, we will show
-             that z is in REACH y then build x --* x -- y --* z *)
-          unabbrev_all_tac
+             that z is in REACHy then build x --* x -- y --* z *)
+          Q.SUBGOAL_THEN `z IN NODES REACHy` assume_tac
+          THEN1 (
+            CCONTR_TAC
+            \\ `~EVEN (SIGMA (\x. DEG x REACHy) (NODES REACHy))`
+                 suffices_by rw[Abbr`REACHy`,HANDSHAKE]
+            \\ `y IN NODES REACHy`
+                 by rw[Abbr`REACHy`,REACH_INVOLUTIVE,GSYM REACH_NON_EMPTY]
+            \\ `y <> z` by (strip_tac \\ fs[])
+            \\ `~EVEN (DEG y REACHy)`
+                 by (rw[Abbr`REACHy`,DEG_REACH,DEG_PARITY_DELE]
+                     \\ metis_tac[])
+            \\ `NODES REACHy = y INSERT (NODES REACHy DELETE y)` by rw[]
+            \\ pop_assum SUBST1_TAC
+            \\ `FINITE (NODES REACHy)` by rw[Abbr`REACHy`,FINITE_NODES]
+            \\ qpat_x_assum `y IN NODES REACHy` (fn stash =>
+                 simp[SUM_IMAGE_INSERT] \\ assume_tac stash)
+            \\ simp[EVEN_ADD]
+            \\ irule EVEN_SUM_IMAGE \\ simp[]
+            \\ qx_gen_tac `v` \\ strip_tac
+            \\ simp[Abbr`REACHy`,DEG_REACH,DEG_PARITY_DELE]
+            \\ metis_tac[]
+          )
+          \\ Q.SUBGOAL_THEN `z <> x` assume_tac
+          THEN1 (
+            strip_tac \\ rw[]
+            \\ qspecl_then [`REACHx`,`REACHy`] mp_tac DISJOINT_ALT
+            \\ simp[]
+            \\ `?x'. (x,x') IN REACHy` by rw[IN_NODES]
+            \\ qexists_tac `(x,x')` \\ simp[]
+            \\ `(x,x') IN DELE (x,y) G`
+                 suffices_by simp[Abbr`REACHx`,REACH_def,tc_rules]
+            \\ simp[Abbr`REACHy`]
+            \\ metis_tac[SUBSET_DEF,REACH_SUBSET]
+          )
+          \\ Q.SUBGOAL_THEN `y NOTIN NODES REACHx` assume_tac
+          THEN1 (
+            strip_tac
+            \\ qspecl_then [`REACHy`,`REACHx`] mp_tac DISJOINT_ALT
+            \\ simp[DISJOINT_SYM]
+            \\ `?y'. (y,y') IN REACHx` by rw[IN_NODES]
+            \\ qexists_tac `(y,y')` \\ simp[]
+            \\ `(y,y') IN DELE (x,y) G`
+                 suffices_by simp[Abbr`REACHy`,REACH_def,tc_rules]
+            \\ simp[Abbr`REACHx`]
+            \\ metis_tac[SUBSET_DEF,REACH_SUBSET]
+          )
+          \\ fs[]
+          \\ unabbrev_all_tac
           \\ `(?lx. CIRCUIT_OF (REACH x (DELE (x,y) G)) x lx x) /\
               (?ly. CIRCUIT_OF (REACH y (DELE (x,y) G)) y ly z)`
                suffices_by (
@@ -1001,21 +1087,51 @@ Proof
           \\ conj_tac
           THEN1 (
             (* build x --* x *)
-            `REACH x (DELE (x,y) G) PSUBSET G`
-              by metis_tac[SUBSET_PSUBSET_TRANS,REACH_SUBSET]
+            `REACH x (DELE (x,y) G) PSUBSET G` by metis_tac[SUBSET_PSUBSET_TRANS,REACH_SUBSET]
             \\ last_x_assum (qspec_then `REACH x (DELE (x,y) G)` mp_tac)
             \\ simp[]
             \\ disch_then match_mp_tac
-            \\ simp[GSYM REACH_NON_EMPTY]
-            (* need to show x IN NODES (REACH x (DELE (x,y) G)) *)
+            \\ simp[GSYM REACH_NON_EMPTY,REACH_INVOLUTIVE]
+            \\ gen_tac
+            \\ reverse (Cases_on `v IN NODES (REACH x (DELE (x,y) G))`)
+            THEN1 simp[DEG_NOTIN_NODES]
+            THEN1 (
+              `z NOTIN NODES (REACH x (DELE (x,y) G))` by (
+                match_mp_tac DISJOINT_NODES_REACH
+                \\ qexists_tac `y` \\ rw[DISJOINT_SYM]
+              )
+              \\ simp[DEG_REACH,DEG_PARITY_DELE]
+              \\ metis_tac[]
+            )
           )
           THEN1 (
             (* build y --* z *)
+            `REACH y (DELE (x,y) G) PSUBSET G` by metis_tac[SUBSET_PSUBSET_TRANS,REACH_SUBSET]
+            \\ last_x_assum (qspec_then `REACH y (DELE (x,y) G)` mp_tac)
+            \\ simp[]
+            \\ disch_then match_mp_tac
+            \\ simp[GSYM REACH_NON_EMPTY,REACH_INVOLUTIVE]
+            \\ `y IN NODES (REACH y (DELE (x,y) G))`
+                  by rw[GSYM REACH_NON_EMPTY,REACH_INVOLUTIVE]
+            \\ Cases_on `z = y`
+            THEN1 (
+              rw[]
+              \\ reverse (Cases_on `v IN NODES (REACH y (DELE (x,y) G))`)
+              THEN1 simp[DEG_NOTIN_NODES]
+              THEN1 (rw[DEG_REACH,DEG_PARITY_DELE] \\ rw[])
+            )
+            THEN1 (
+              rw[] \\ simp[DEG_REACH,DEG_PARITY_DELE]
+              \\ reverse (Cases_on `v IN NODES (REACH y (DELE (x,y) G))`)
+              THEN1 simp[DEG_NOTIN_NODES]
+              THEN1 (rw[DEG_REACH,DEG_PARITY_DELE] \\ rw[])
+            )
           )
         )
       )
+    )
+  )
 QED
-*)
 
 export_theory ();
 
