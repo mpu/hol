@@ -384,13 +384,74 @@ Proof
   )
 QED
 
-Theorem CONNECTED_REACH:
+Theorem CONNECTED_REACH[simp]:
   !G n. GRAPH G ==> CONNECTED (REACH n G)
 Proof
   rw[CONNECTED_def]
   \\ imp_res_tac IN_NODES_REACH
   \\ `GRAPH (tc (REACH n G))` by rw[]
   \\ metis_tac[tc_rules,GRAPH_def]
+QED
+
+Theorem REACH_CONNECTED_EQ:
+  !G x. GRAPH G /\ CONNECTED G /\ x IN NODES G ==> REACH x G = G
+Proof
+  rw[REACH_def,EXTENSION]
+  \\ rename [`e IN G /\ _`]
+  \\ eq_tac \\ rw[]
+  \\ `?y. (x,y) IN G` by rw[IN_NODES]
+  \\ reverse (Cases_on `SND e = x`)
+  THEN1 (
+    fs[CONNECTED_def]
+    \\ first_x_assum irule
+    \\ simp[]
+    \\ `(SND e, FST e) IN G` by fs[GRAPH_def]
+    \\ simp[NODES_def]
+    \\ qexists_tac `(SND e,FST e)` \\ simp[]
+  )
+  THEN1 (
+    irule (CONJUNCT2 (SPEC_ALL tc_rules))
+    \\ qexists_tac `y`
+    \\ fs[tc_rules,GRAPH_def]
+  )
+QED
+
+Theorem REACH_NON_EMPTY:
+  !G x. REACH x G <> {} <=> x IN NODES G
+Proof
+  rw[] \\ eq_tac \\ strip_tac
+  THEN1 (
+    first_assum (mp_tac o MATCH_MP CHOICE_DEF)
+    \\ rename [`e IN REACH _ _`]
+    \\ simp[REACH_def,Once tc_cases_left]
+    \\ strip_tac \\ simp[NODES_def]
+    THEN1 (qexists_tac `(x,SND e)` \\ rw[])
+    THEN1 (qexists_tac `(x,z)` \\ rw[])
+  )
+  THEN1 (
+    fs[NODES_def]
+    \\ simp[EXTENSION]
+    \\ qexists_tac `x'`
+    \\ rw[REACH_def,tc_rules]
+  )
+QED
+
+Theorem REACH_INVOLUTIVE:
+  !G x. GRAPH G ==> REACH x (REACH x G) = REACH x G
+Proof
+  rw[]
+  \\ Cases_on `x IN NODES G`
+  THEN1 (
+    `?y. (x,y) IN G` by rw[IN_NODES]
+    \\ `x IN NODES (REACH x G)`
+         by (simp[NODES_def] \\ qexists_tac `(x,y)`
+             \\ rw[REACH_def,tc_rules])
+    \\ simp[REACH_CONNECTED_EQ]
+  )
+  THEN1 (
+    `REACH x G = {}` by (CCONTR_TAC \\ fs[REACH_NON_EMPTY])
+    \\ simp[REACH_def]
+  )
 QED
 
 Theorem PATH_SPLIT0[local]:
@@ -654,26 +715,6 @@ Proof
   )
 QED
 
-Theorem REACH_NON_EMPTY:
-  !G x. REACH x G <> {} <=> x IN NODES G
-Proof
-  rw[] \\ eq_tac \\ strip_tac
-  THEN1 (
-    first_assum (mp_tac o MATCH_MP CHOICE_DEF)
-    \\ rename [`e IN REACH _ _`]
-    \\ simp[REACH_def,Once tc_cases_left]
-    \\ strip_tac \\ simp[NODES_def]
-    THEN1 (qexists_tac `(x,SND e)` \\ rw[])
-    THEN1 (qexists_tac `(x,z)` \\ rw[])
-  )
-  THEN1 (
-    fs[NODES_def]
-    \\ simp[EXTENSION]
-    \\ qexists_tac `x'`
-    \\ rw[REACH_def,tc_rules]
-  )
-QED
-
 Definition CIRCUIT_OF_def:
   CIRCUIT_OF G x l z = (CIRCUIT x l z /\ G = PAIRS x l z)
 End
@@ -792,7 +833,7 @@ Proof
     THEN1 (
       rw[]
       \\ `?l. CIRCUIT_OF (DELE (x,x) G) x l z`
-           suffices_by (metis_tac[CIRCUIT_OF_DELE])
+           suffices_by (metis_tac[CIRCUIT_ADD_BEG])
       \\ last_x_assum (mp_tac o Q.SPEC `DELE (x,x) G`)
       \\ `CONNECTED (DELE (x,x) G)` by rw[CONNECTED_DELE_LOOP]
       \\ simp[]
@@ -806,14 +847,14 @@ Proof
       \\ (Cases_on `REACH x (DELE (x,y) G) = {}`
           \\ Cases_on `REACH y (DELE (x,y) G) = {}`
           \\ fs[])
-      (* -- x is only connected to y; build a circuit x -- y --* z *)
+      (* ++ x is only connected to y; build a circuit x -- y --* z *)
       THEN1 (
         `?l. CIRCUIT_OF (DELE (x,y) G) y l z`
-           suffices_by (metis_tac[CIRCUIT_OF_DELE])
+           suffices_by (metis_tac[CIRCUIT_ADD_BEG])
         \\ last_x_assum (qspec_then `DELE (x,y) G` mp_tac)
         \\ `CONNECTED (DELE (x,y) G)`
              by (qpat_assum `DELE _ _ = REACH _ _` SUBST1_TAC
-                 \\ simp[CONNECTED_REACH])
+                 \\ simp[])
         \\ simp[]
         \\ disch_then match_mp_tac
         \\ `y IN NODES (DELE (x,y) G)` by rw[GSYM REACH_NON_EMPTY]
@@ -849,7 +890,7 @@ Proof
           )
         )
       )
-      (* -- y is only connected to x; it must be that y = z *)
+      (* ++ y is only connected to x; it must be that y = z *)
       THEN1 (
         reverse (Cases_on `y = z`)
         THEN1 ( (* y <> z; that is impossible *)
@@ -872,6 +913,109 @@ Proof
         THEN1 (
           (* build a circuit x --* x -- y *)
           rw[] \\ full_simp_tac std_ss []
+          \\ `?l. CIRCUIT_OF (DELE (x,y) G) x l x`
+               suffices_by (strip_tac
+                            \\ qexists_tac `l ++ [x]`
+                            \\ rw[CIRCUIT_ADD_END])
+          \\ last_x_assum (qspec_then `DELE (x,y) G` mp_tac)
+          \\ `CONNECTED (DELE (x,y) G)`
+               by (qpat_assum `DELE _ _ = REACH _ _` SUBST1_TAC
+                   \\ simp[])
+          \\ simp[]
+          \\ disch_then match_mp_tac
+          \\ `x IN NODES (DELE (x,y) G)` by rw[GSYM REACH_NON_EMPTY]
+          \\ simp[DEG_PARITY_DELE]
+          \\ rw[] \\ rw[]
+        )
+      )
+      (* ++ y and x are both connected to non-empty subgraphs *)
+      THEN1 (
+        qmatch_assum_abbrev_tac `DELE (x,y) G = REACHx UNION REACHy`
+        \\ reverse (Cases_on `DISJOINT REACHx REACHy`)
+        THEN1 (
+          `REACHx = REACHy` by (
+            unabbrev_all_tac
+            \\ irule REACH_EQ
+            \\ fs[DISJOINT_DEF]
+          )
+          \\ unabbrev_all_tac
+          \\ `?l. CIRCUIT_OF (DELE (x,y) G) y l z`
+               suffices_by metis_tac[CIRCUIT_ADD_BEG]
+          \\ last_x_assum (qspec_then `DELE (x,y) G` mp_tac)
+          \\ `CONNECTED (DELE (x,y) G)`
+               by (qpat_assum `DELE _ _ = _ UNION _` SUBST1_TAC
+                   \\ pop_assum SUBST1_TAC
+                   \\ simp[])
+          \\ simp[DELE_PSUBSET]
+          \\ disch_then match_mp_tac
+          \\ `y IN NODES (DELE (x,y) G)` by rw[GSYM REACH_NON_EMPTY]
+          \\ simp[]
+          \\ reverse conj_tac
+          THEN1 metis_tac[DEG_PARITY_DELE]
+          THEN1 (
+            Cases_on `z = x` THEN1 rw[GSYM REACH_NON_EMPTY]
+            \\ Cases_on `z = y` THEN1 rw[GSYM REACH_NON_EMPTY]
+            \\ qpat_assum `z IN _` (mp_tac o MATCH_MP IN_NODES)
+            \\ disch_then (qx_choose_then `z'` assume_tac)
+            \\ simp[NODES_def]
+            \\ qexists_tac `(z,z')`
+            \\ rw[DELE_def]
+          )
+        )
+        THEN1 (
+          (* the two reachable graphs are disjoint, we will show
+             that z is in REACH y then build x --* x -- y --* z *)
+          unabbrev_all_tac
+          \\ `(?lx. CIRCUIT_OF (REACH x (DELE (x,y) G)) x lx x) /\
+              (?ly. CIRCUIT_OF (REACH y (DELE (x,y) G)) y ly z)`
+               suffices_by (
+                 strip_tac
+                 \\ `G = REACH x (DELE (x,y) G) UNION
+                         ADDE (x,y) (REACH y (DELE (x,y) G)) ` by (
+                      `ADDE (x,y) (DELE (x,y) G) = G` by rw[ADDE_DELE]
+                      \\ metis_tac[ADDE_UNION,UNION_COMM,UNION_ASSOC]
+                    )
+                 \\ pop_assum SUBST1_TAC
+                 \\ qexists_tac `lx ++ [x] ++ y::ly`
+                 \\ match_mp_tac CIRCUIT_APPEND
+                 \\ simp[]
+                 \\ conj_tac
+                 THEN1 (
+                   simp[ADDE_def,DISJOINT_INSERT]
+                   \\ mp_tac (PROVE[REACH_SUBSET,SUBSET_DEF]
+                              ``!a G. a NOTIN G ==> a NOTIN REACH x G``)
+                   \\ rw[DELE_def]
+                 )
+                 THEN1 (
+                   irule CIRCUIT_ADD_BEG
+                   \\ simp[]
+                   \\ conj_tac
+                   THEN1 simp[ADDE_def]
+                   THEN1 (
+                     `(x,y) NOTIN REACH y (DELE (x,y) G)` by (
+                        mp_tac (PROVE[REACH_SUBSET,SUBSET_DEF]
+                               ``!a G. a NOTIN G ==> a NOTIN REACH y G``)
+                        \\ rw[DELE_def])
+                     \\ simp[DELE_ADDE]
+                   )
+                 )
+               )
+          \\ conj_tac
+          THEN1 (
+            (* build x --* x *)
+            `REACH x (DELE (x,y) G) PSUBSET G`
+              by metis_tac[SUBSET_PSUBSET_TRANS,REACH_SUBSET]
+            \\ last_x_assum (qspec_then `REACH x (DELE (x,y) G)` mp_tac)
+            \\ simp[]
+            \\ disch_then match_mp_tac
+            \\ simp[GSYM REACH_NON_EMPTY]
+            (* need to show x IN NODES (REACH x (DELE (x,y) G)) *)
+          )
+          THEN1 (
+            (* build y --* z *)
+          )
+        )
+      )
 QED
 *)
 
