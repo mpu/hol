@@ -3,9 +3,9 @@ open HolKernel boolLib bossLib listTheory pred_setTheory arithmeticTheory
 
 new_theory "euler";
 
-(* An undirected graph. This definition of graphs does not permit nodes
-   that do not appear in any edge; these seem somewhat pathological so
-   I just kept it simple. *)
+(* An undirected graph. Note: This definition of graphs does not permit
+   nodes that do not appear in any edge; the advantage is that it's just
+   a set. *)
 Definition GRAPH_def:
   GRAPH G <=> (!x y. (x,y) IN G <=> (y,x) IN G) /\ FINITE G
 End
@@ -118,7 +118,7 @@ Definition PAIRS_def[simp]:
   (PAIRS x (y::l) z = ADDE (x,y) (PAIRS y l z))
 End
 
-Theorem GRAPH_PAIRS:
+Theorem GRAPH_PAIRS[simp]:
   !l x z. GRAPH (PAIRS x l z)
 Proof Induct \\ rw[]
 QED
@@ -197,7 +197,6 @@ Proof
     (* non-empty list *)
     qx_genl_tac [`l`,`x`,`y`,`z`]
     \\ strip_tac \\ pop_assum mp_tac
-    \\ qspecl_then [`l`,`y`,`z`] assume_tac GRAPH_PAIRS 
     \\ simp[ODD_EVEN,DEG_ADDE,EVEN_ADD]
     \\ rw[] \\ rw[DEG_ADDE,DEG_GRAPH1,EVEN_ADD] \\ rw[]
   )
@@ -290,7 +289,7 @@ Definition CONNECTED_def:
   CONNECTED G = !x y. x IN NODES G /\ y IN NODES G /\ x <> y ==> (x,y) IN tc G
 End
 
-Theorem GRAPH_TC:
+Theorem GRAPH_TC[simp]:
   !G. GRAPH G ==> GRAPH (tc G)
 Proof
   rw[GRAPH_def]
@@ -330,7 +329,7 @@ Proof
   rw[REACH_def,SUBSET_DEF]
 QED
 
-Theorem GRAPH_REACH:
+Theorem GRAPH_REACH[simp]:
   !G n. GRAPH G ==> GRAPH (REACH n G)
 Proof
   rw[GRAPH_def]
@@ -357,7 +356,7 @@ Proof
   \\ `!G. GRAPH G ==> NODES G = IMAGE SND G` by
        (simp[GRAPH_def,EXTENSION,NODES_def]
         \\ metis_tac[PAIR,FST,SND])
-  \\ pop_assum (fn thm => rw[GRAPH_REACH,thm])
+  \\ pop_assum (fn thm => rw[thm])
   \\ Cases_on `x'` \\ rename [`(y,z) IN REACH x G`]
   \\ simp[]
   \\ `(x,z) IN tc G /\ (y,z) IN G` by fs[REACH_def]
@@ -390,7 +389,7 @@ Theorem CONNECTED_REACH:
 Proof
   rw[CONNECTED_def]
   \\ imp_res_tac IN_NODES_REACH
-  \\ `GRAPH (tc (REACH n G))` by rw[GRAPH_REACH,GRAPH_TC]
+  \\ `GRAPH (tc (REACH n G))` by rw[]
   \\ metis_tac[tc_rules,GRAPH_def]
 QED
 
@@ -707,7 +706,7 @@ Proof
     THEN1 (
       `CIRCUIT_OF (PAIRS h l1 y UNION PAIRS y l2 z) h (l1 ++ [y] ++ l2) z` by (
         first_x_assum irule
-        \\ simp[GRAPH_PAIRS,CIRCUIT_OF_def]
+        \\ simp[CIRCUIT_OF_def]
         \\ conj_tac
         THEN1 fs[ADDE_def,DISJOINT_INSERT]
         THEN1 fs[Once CIRCUIT_cases]
