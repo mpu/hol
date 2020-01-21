@@ -90,6 +90,16 @@ Proof
   \\ rw[DELETE_PSUBSET]
 QED
 
+Theorem SUBSET_OF_ADDE:
+  !G e. G SUBSET ADDE e G
+Proof
+  Cases_on `e` \\ rw[ADDE_def]
+  \\ irule SUBSET_TRANS
+  \\ qexists_tac `(r,q) INSERT G`
+  \\ conj_tac
+  \\ MATCH_ACCEPT_TAC SUBSET_OF_INSERT
+QED
+
 Theorem GRAPH_INDUCT:
   !P. P {} /\ (!G x y. GRAPH G /\ P G /\ (x,y) NOTIN G ==> P (ADDE (x,y) G)) ==>
       !G. GRAPH G ==> P G
@@ -220,6 +230,12 @@ Theorem IN_NODES_DELE:
 Proof
   rw[NODES_def,DELE_def]
   \\ qexists_tac `x'` \\ rw[]
+QED
+
+Theorem NODES_GRAPH1:
+  !x y. NODES (GRAPH1 (x,y)) = {x;y}
+Proof
+  rw[NODES_def,GRAPH1_def]
 QED
 
 Theorem NODES_ADDE:
@@ -405,6 +421,24 @@ Theorem CONNECTED_GRAPH1[simp]:
   !x y. CONNECTED (GRAPH1 (x,y))
 Proof
   rw[GRAPH1_def,NODES_def,CONNECTED_def] \\ rw[tc_rules]
+QED
+
+Theorem CONNECTED_ADDE:
+  !G x y. CONNECTED G /\ y IN NODES G ==> CONNECTED (ADDE (x,y) G)
+Proof
+  rw[CONNECTED_def]
+  \\ `(x,y) IN ADDE (x,y) G /\ (y,x) IN ADDE (x,y) G` by rw[ADDE_def]
+  \\ `tc G SUBSET tc (ADDE (x,y) G)` by rw[tc_mono,SUBSET_OF_ADDE]
+  \\ fs[NODES_ADDE] \\ metis_tac[tc_rules,SUBSET_DEF]
+QED
+
+Theorem CONNECTED_PAIRS[simp]:
+  !x l z. CONNECTED (PAIRS x l z)
+Proof
+  Induct_on `l` \\ rw[]
+  \\ `h IN NODES (PAIRS h l z)`
+       suffices_by rw[CONNECTED_ADDE]
+  \\ Cases_on `l` \\ rw[NODES_GRAPH1,NODES_ADDE]
 QED
 
 Theorem CONNECTED_REACH[simp]:
@@ -1130,6 +1164,25 @@ Proof
         )
       )
     )
+  )
+QED
+
+Theorem EULER:
+  !G x z. GRAPH G /\ x IN NODES G /\ z IN NODES G ==> (
+    (CONNECTED G /\
+     if z = x
+     then (!v. EVEN (DEG v G))
+     else (ODD (DEG x G) /\ ODD (DEG z G) /\
+          (!v. v <> x /\ v <> z ==> EVEN (DEG v G))))
+     <=> ?l. CIRCUIT_OF G x l z)
+Proof
+  rpt strip_tac \\ eq_tac \\ rpt strip_tac
+  THEN1 simp[EULER1]
+  THEN1 fs[CIRCUIT_OF_def,CONNECTED_PAIRS]
+  THEN1 (
+    fs[CIRCUIT_OF_def]
+    \\ qspecl_then [`x`,`l`,`z`] mp_tac EULER0
+    \\ simp[]
   )
 QED
 
