@@ -240,18 +240,16 @@ Proof
 QED
 
 Theorem DEG_NOTIN_NODES:
-  !G x. FINITE G /\ x NOTIN NODES G ==> DEG x G = 0
+  !G x. x NOTIN NODES G ==> DEG x G = 0
 Proof
   rw[DEG_def]
+  THEN1 (simp[NODES_def] \\ qexists_tac `(x,x)` \\ rw[])
   THEN1 (
-    `G = ADDE (x,x) G` by (simp[ADDE_def] \\ metis_tac[ABSORPTION])
-    \\ pop_assum SUBST1_TAC
-    \\ rw[NODES_ADDE]
-  )
-  THEN1 (
-    rw[NEIGHB_def,EXTENSION]
-    \\ `NODES ((x,x') INSERT G) = x INSERT NODES G` by rw[NODES_def]
-    \\ metis_tac[ABSORPTION]
+    `NEIGHB x G = {}` suffices_by rw[]
+    \\ rw[NEIGHB_def,EXTENSION]
+    \\ fs[NODES_def]
+    \\ pop_assum (qspec_then `(x,x')` mp_tac)
+    \\ simp[]
   )
 QED
 
