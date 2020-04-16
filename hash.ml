@@ -102,3 +102,14 @@ let RANGE_EXISTS =
 
 (* Nice recursive range function! *)
 let RANGE = new_specification["range"] RANGE_EXISTS;;
+
+let MINIMAL_SUC = prove
+  (`!P. (?n. P n) /\ ~(P 0) ==> (minimal) P = SUC ((minimal) (P o SUC))`,
+   GEN_TAC THEN SUBST1_TAC (MESON [num_CASES; NOT_SUC]
+       `(?n. P n) /\ ~(P 0) <=> (?n. (P (SUC n))) /\ ~(P 0)`) THEN
+   REWRITE_TAC[REWRITE_RULE[o_THM] (SPEC `(P:num->bool) o SUC` MINIMAL)] THEN
+   STRIP_TAC THEN MATCH_MP_TAC MINIMAL_UNIQUE THEN CONJ_TAC THENL
+   [FIRST_ASSUM ACCEPT_TAC; ALL_TAC] THEN
+   GEN_TAC THEN DISJ_CASES_TAC (SPEC `m:num` num_CASES) THEN
+   ASM_REWRITE_TAC[] THEN POP_ASSUM (CHOOSE_THEN SUBST1_TAC) THEN
+   ASM_SIMP_TAC[LT_SUC]);;
