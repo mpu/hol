@@ -102,7 +102,7 @@ let RANGE_EXISTS =
   PROVE_HYP wf_thm thm;;
 
 (* Nice recursive range function! *)
-let RANGE = new_specification["range"] RANGE_EXISTS;;
+(* let RANGE = new_specification["range"] RANGE_EXISTS;; *)
 
 let SUCM = new_definition `SUCM m x = SUC x MOD m`;;
 
@@ -122,48 +122,30 @@ let ITER_SUCM_LT = prove
   (`!m a b. b < m ==> ITER a (SUCM m) b = (a + b) MOD m`,
    MESON_TAC[MOD_LT; ITER_SUCM]);;
 
-(* How do we program loops?
-   ------------------------
-   We repeatedly apply an operation on a piece of data (e.g., grow a
-   set, increment an integer, modularly increment an integer) and
-   write a check (is the set unchanged, is a < b, is a == b).
-   It would be nice to have a way to prove the termination of loops
-   of this shape. The loop accumulator acc verifies
-   `?n. acc = ITER n f acc0`; the loop terminates if
-   `?n. EXIT_PRED (ITER n f acc0)` and the number of iterations
-   is `minimal n. EXIT_PRED (ITER n f acc0)`.
+needs "loop.ml";;
 
-WF_INDUCT_TAC
-*)
-
-(* Going to have to prove ?n. ITER n (SUCM m) a = b MOD m
-   that is ?n. (a + n) MOD m = b MOD m
-   and if ~(m = 0) then we can take n = (b + m - a) *)
-
-(*
-
-let MDIST = new_definition `mdist m (a, b) = ((b + m) - (a MOD m)) MOD m`;;
-
-let _ = prove
-  (`!m a b. mdist m (a, b) = minimal n. (a + n) MOD m = b MOD m`,
-   REPEAT GEN_TAC THEN REWRITE_TAC[MDIST; ITER_SUCM] THEN
-   CONV_TAC SYM_CONV THEN MATCH_MP_TAC MINIMAL_UNIQUE THEN CONJ_TAC THENL
-   [CONV_TAC (BETA_CONV THENC MOD_DOWN_CONV) THEN
-    REWRITE_TAC[AC ADD_AC `(b + m - a MOD m) + a = b + (a + m - a MOD m)`] THEN
-    ONCE_REWRITE_TAC[GSYM MOD_ADD_MOD] THEN
-    GEN_REWRITE_TAC RAND_CONV [GSYM MOD_MOD_REFL] THEN
-    MATCH_MP_TAC (MESON[] `x = y ==> x MOD m = y MOD m`) THEN
-    ASM_CASES_TAC `m = 0` THEN ASM_REWRITE_TAC[MULT_CLAUSES; ADD_CLAUSES; MOD_ZERO] THEN
-    REWRITE_TAC[EQ_ADD_LCANCEL_0] THEN
-    MATCH_MP_TAC MOD_UNIQ THEN EXISTS_TAC `a DIV m + 1` THEN
-    REWRITE_TAC[RIGHT_ADD_DISTRIB; MULT_CLAUSES; ADD_0]
-    MESON
-    TAUT
-
-    x
-   search[`m - a + a`] (* SUB_ADD *)
-   search[`(a + m) MOD m`] (* MOD_ADD_MODULUS *)
-   NUMBER_TAC
-   EVAL_TAC
-
-*)
+(* Same as above but using the LOOP construct *)
+let RANGE_EXISTS =
+  let thm = pure_prove_recursive_function_exists
+    `?f. !a b m. f a b m =
+        if a = b \/ ~(a < m /\ b < m)
+        then {}
+        else a INSERT (f (SUCM m a) b m)`
+  in
+  let wf_thm = prove
+    ((hd (hyp thm)),
+     EXISTS_TAC `LOOP (\(a,b,m). SUCM m a, b, m)
+       (\(a,b,m). a = b \/ ~(a < m /\ b < m))` THEN
+     GEN_REWRITE_TAC (RAND_CONV o DEPTH_CONV) [LOOP] THEN SIMP_TAC[] THEN
+     MATCH_MP_TAC WF_LOOP THEN REWRITE_TAC[FORALL_PAIR_THM] THEN
+     MAP_EVERY X_GEN_TAC [`a:num`; `b:num`; `m:num`] THEN
+     SUBGOAL_THEN `!n a. ITER n (\(a,b,m). SUCM m a, b, m) (a,(b:num),m) =
+         ITER n (SUCM m) a, b, m` (fun th -> REWRITE_TAC[th]) THENL
+     [INDUCT_TAC THEN ASM_REWRITE_TAC[ITER]; ALL_TAC] THEN
+     REWRITE_TAC[TAUT `~(A \/ ~(B /\ C)) <=> ~A /\ B /\ C`] THEN
+     STRIP_TAC THEN ASM_SIMP_TAC[ITER_SUCM_LT] THEN
+     EXISTS_TAC `b + m - a` THEN DISJ1_TAC THEN
+     ASM_SIMP_TAC[GSYM ADD_ASSOC; LT_IMP_LE; SUB_ADD; MOD_ADD_MODULUS] THEN
+     POP_ASSUM (MATCH_ACCEPT_TAC o (MATCH_MP MOD_LT)))
+  in
+  PROVE_HYP wf_thm thm;;
