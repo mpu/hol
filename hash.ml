@@ -23,7 +23,8 @@ let mod_range = new_definition
 let MOD_ADD_MODULUS = prove
   (`(!m n. (n + m) MOD m = n MOD m) /\
     (!m n. (m + n) MOD m = n MOD m)`,
-   MESON_TAC[MOD_MULT_ADD;MULT_CLAUSES]);;
+   EVERY(map (MP_TAC o SPEC `1`) (CONJUNCTS MOD_MULT_ADD)) THEN
+   SIMP_TAC[MULT_CLAUSES]);;
 
 (* Sweet! First non-trivial theorem :) *)
 let LT_SUC_MOD = prove
@@ -103,13 +104,66 @@ let RANGE_EXISTS =
 (* Nice recursive range function! *)
 let RANGE = new_specification["range"] RANGE_EXISTS;;
 
-let MINIMAL_SUC = prove
-  (`!P. (?n. P n) /\ ~(P 0) ==> (minimal) P = SUC ((minimal) (P o SUC))`,
-   GEN_TAC THEN SUBST1_TAC (MESON [num_CASES; NOT_SUC]
-       `(?n. P n) /\ ~(P 0) <=> (?n. (P (SUC n))) /\ ~(P 0)`) THEN
-   REWRITE_TAC[REWRITE_RULE[o_THM] (SPEC `(P:num->bool) o SUC` MINIMAL)] THEN
-   STRIP_TAC THEN MATCH_MP_TAC MINIMAL_UNIQUE THEN CONJ_TAC THENL
-   [FIRST_ASSUM ACCEPT_TAC; ALL_TAC] THEN
-   GEN_TAC THEN DISJ_CASES_TAC (SPEC `m:num` num_CASES) THEN
-   ASM_REWRITE_TAC[] THEN POP_ASSUM (CHOOSE_THEN SUBST1_TAC) THEN
-   ASM_SIMP_TAC[LT_SUC]);;
+let SUCM = new_definition `SUCM m x = SUC x MOD m`;;
+
+let SUCM_LT_EQ_LT = prove
+  (`!n m. SUCM m n < m <=> 0 < m`,
+   MESON_TAC[SUCM; MOD_LT_EQ_LT]);;
+
+needs "Library/iter.ml";;
+
+let ITER_SUCM = prove
+  (`!m a b. ITER a (SUCM m) (b MOD m) = (a + b) MOD m`,
+   GEN_TAC THEN INDUCT_TAC THEN SIMP_TAC[ITER_ALT; ADD] THEN
+   ONCE_REWRITE_TAC[SUCM] THEN CONV_TAC MOD_DOWN_CONV THEN
+   GEN_TAC THEN ASM_REWRITE_TAC[ADD_CLAUSES]);;
+
+let ITER_SUCM_LT = prove
+  (`!m a b. b < m ==> ITER a (SUCM m) b = (a + b) MOD m`,
+   MESON_TAC[MOD_LT; ITER_SUCM]);;
+
+(* How do we program loops?
+   ------------------------
+   We repeatedly apply an operation on a piece of data (e.g., grow a
+   set, increment an integer, modularly increment an integer) and
+   write a check (is the set unchanged, is a < b, is a == b).
+   It would be nice to have a way to prove the termination of loops
+   of this shape. The loop accumulator acc verifies
+   `?n. acc = ITER n f acc0`; the loop terminates if
+   `?n. EXIT_PRED (ITER n f acc0)` and the number of iterations
+   is `minimal n. EXIT_PRED (ITER n f acc0)`.
+
+WF_INDUCT_TAC
+*)
+
+(* Going to have to prove ?n. ITER n (SUCM m) a = b MOD m
+   that is ?n. (a + n) MOD m = b MOD m
+   and if ~(m = 0) then we can take n = (b + m - a) *)
+
+(*
+
+let MDIST = new_definition `mdist m (a, b) = ((b + m) - (a MOD m)) MOD m`;;
+
+let _ = prove
+  (`!m a b. mdist m (a, b) = minimal n. (a + n) MOD m = b MOD m`,
+   REPEAT GEN_TAC THEN REWRITE_TAC[MDIST; ITER_SUCM] THEN
+   CONV_TAC SYM_CONV THEN MATCH_MP_TAC MINIMAL_UNIQUE THEN CONJ_TAC THENL
+   [CONV_TAC (BETA_CONV THENC MOD_DOWN_CONV) THEN
+    REWRITE_TAC[AC ADD_AC `(b + m - a MOD m) + a = b + (a + m - a MOD m)`] THEN
+    ONCE_REWRITE_TAC[GSYM MOD_ADD_MOD] THEN
+    GEN_REWRITE_TAC RAND_CONV [GSYM MOD_MOD_REFL] THEN
+    MATCH_MP_TAC (MESON[] `x = y ==> x MOD m = y MOD m`) THEN
+    ASM_CASES_TAC `m = 0` THEN ASM_REWRITE_TAC[MULT_CLAUSES; ADD_CLAUSES; MOD_ZERO] THEN
+    REWRITE_TAC[EQ_ADD_LCANCEL_0] THEN
+    MATCH_MP_TAC MOD_UNIQ THEN EXISTS_TAC `a DIV m + 1` THEN
+    REWRITE_TAC[RIGHT_ADD_DISTRIB; MULT_CLAUSES; ADD_0]
+    MESON
+    TAUT
+
+    x
+   search[`m - a + a`] (* SUB_ADD *)
+   search[`(a + m) MOD m`] (* MOD_ADD_MODULUS *)
+   NUMBER_TAC
+   EVAL_TAC
+
+*)
