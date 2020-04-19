@@ -1,4 +1,4 @@
-open HolKernel boolLib bossLib arithmeticTheory;
+open HolKernel boolLib bossLib arithmeticTheory optionTheory;
 
 (* Specification language, with extraction to C *)
 val _ = new_theory "specl"
@@ -31,37 +31,31 @@ val erun_def = Define`
     | CEQ => if erun st e1  = erun st e2 then 1 else 0
     | CNE => if erun st e1 <> erun st e2 then 1 else 0)`
 
-(* the result of a computation *)
-val res_def = Datatype`res
-  = Done (num -> num)
-  | Timeout
-  `
-
 val srun_def = Define`
-  (srun n st Nop = Done st) /\
-  (srun n st (Set v e) = Done ((v =+ erun st e) st)) /\
+  (srun n st Nop = SOME st) /\
+  (srun n st (Set v e) = SOME ((v =+ erun st e) st)) /\
   (srun n st (Seq s1 s2) =
     case srun n st s1 of
-      Done st1 => srun n st1 s2
-    | Timeout => Timeout) /\
+      SOME st1 => srun n st1 s2
+    | NONE => NONE) /\
   (srun (SUC n) st (Whl e s) =
     if erun st e = 0 then
-      Done st
+      SOME st
     else
       srun n st (Seq s (Whl e s))) /\
-  (srun 0 st (Whl e s) = Timeout)`
+  (srun 0 st (Whl e s) = NONE)`
 
 (**************** Hoare program logic ****************)
 
 val tri_ind_def = Define`tri_ind n PRE s PST
-  = !st1 st2. PRE st1 /\ srun n st1 s = Done st2 ==> PST st2`
+  = !st1 st2. PRE st1 /\ srun n st1 s = SOME st2 ==> PST st2`
 
 val tri_def = Define`tri PRE s PST = !n. tri_ind n PRE s PST`
 
 val srun_monotonic = Q.prove(
   `!n1 s st1 n2 st2.
-     n1 < n2 /\ srun n1 st1 s = Done st2 ==>
-     srun n2 st1 s = Done st2`,
+     n1 < n2 /\ srun n1 st1 s = SOME st2 ==>
+     srun n2 st1 s = SOME st2`,
   Induct >| [
     (* base *)
     Induct_on `s` >> rw[srun_def] >>
@@ -105,10 +99,8 @@ Theorem hoare_seq:
 Proof
   rw[tri_def, tri_ind_def, srun_def] >>
   Cases_on `srun n st1 s1` >> fs[] >>
-  first_x_assum irule >>
-  qexists_tac `n` >> qexists_tac `f` >> rw[] >>
-  first_x_assum irule >>
-  qexists_tac `n` >> qexists_tac `st1` >> rw[]
+  first_x_assum (qspecl_then [`n`,`x`] match_mp_tac) >> rw[] >>
+  first_x_assum (qspecl_then [`n`,`st1`] match_mp_tac) >> rw[]
 QED
 
 val whl_ind_lem = Q.prove (
@@ -123,8 +115,8 @@ val whl_ind_lem = Q.prove (
      >- rw[]
      >> Cases_on `srun n st1 s` >> fs[] >> RES_TAC >>
         last_x_assum (irule o SIMP_RULE pure_ss [tri_ind_def, SimpR ``$==>``]) >>
-        qexists_tac `s` >> qexists_tac `f` >> rw[] >| [
-          last_x_assum (irule o SIMP_RULE pure_ss [tri_ind_def, SimpR ``$==>``]) >>
+        qexists_tac `s` >> qexists_tac `x` >> rw[] >| [
+          last_x_assum (match_mp_tac o REWRITE_RULE [tri_ind_def]) >>
           qexists_tac `st1` >> rw[] >>
           irule srun_monotonic >> qexists_tac `n` >> rw[],
           irule tri_ind_monotonic >> qexists_tac `SUC n` >> rw[]
