@@ -47,12 +47,12 @@ let loop_RECURSION = prove
    EXPAND_TAC "MINI" THEN ASM_REWRITE_TAC[ITER; LT];
    (* case: ~b s *)
    FIRST_ASSUM(fun asm -> REWRITE_TAC[GSYM(CONJUNCT2 asm)]) THEN
-   (* --- lemma 3: MINI and SUC *)
    SUBGOAL_THEN `(@n:num. MINI (s:S) n) = SUC (@n. MINI (i s) n)`
     (fun th -> ASM_REWRITE_TAC[th]) THEN
    FIRST_ASSUM MATCH_MP_TAC THEN EXISTS_TAC `s:S` THEN
    CONV_TAC (DEPTH_CONV SELECT_CONV) THEN
    CONJ_TAC THENL [FIRST_ASSUM MATCH_ACCEPT_TAC; ALL_TAC] THEN
+   (* --- lemma 3: MINI and SUC *)
    SUBGOAL_THEN `!n:num. MINI ((i:S->S) s) n <=> MINI s (SUC n)`
      (fun th -> REWRITE_TAC[th]) THENL
    [POP_ASSUM MP_TAC THEN EXPAND_TAC "MINI" THEN
