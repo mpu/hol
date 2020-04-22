@@ -6,7 +6,7 @@
 needs "Library/iter.ml";;
 
 let loop_RECURSION = prove
-  (`!(e:A) c b i R. WF(R) /\ (!(s:S). R (i s) s) ==>
+  (`!(e:A) c b i R. WF(R) /\ (!(s:S). ~b s ==> R (i s) s) ==>
       ?f. !s. f s = if b s then e else c s (f (i s))`,
   REWRITE_TAC[WF_IND] THEN REPEAT GEN_TAC THEN STRIP_TAC THEN
   ABBREV_TAC `MINI = \s:S n.
@@ -18,7 +18,7 @@ let loop_RECURSION = prove
    ASM_CASES_TAC `(b:S->bool) s` THENL
    [EXISTS_TAC `0` THEN ASM_REWRITE_TAC[ITER; LT]; ALL_TAC] THEN
    FIRST_X_ASSUM (MP_TAC o SPEC `(i:S->S) s`) THEN
-   ASM_REWRITE_TAC[] THEN DISCH_THEN (CHOOSE_THEN STRIP_ASSUME_TAC) THEN
+   ASM_SIMP_TAC[] THEN DISCH_THEN (CHOOSE_THEN STRIP_ASSUME_TAC) THEN
    EXISTS_TAC `SUC n` THEN ASM_REWRITE_TAC[ITER_ALT] THEN GEN_TAC THEN
    DISJ_CASES_TAC (SPEC `m:num` num_CASES) THENL
    [ASM_REWRITE_TAC[ITER];
