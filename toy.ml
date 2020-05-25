@@ -22,6 +22,27 @@ let MODRNG_ZERO = prove
     [ALL_TAC; EXISTS_TAC `x - a`] THEN
     ASM_ARITH_TAC]);;
 
+let MODRNG_SUBSET_NUMSEG = prove
+  (`!m a b. ~(m = 0) ==> MODRNG0 m a b SUBSET 0..m - 1`,
+   REWRITE_TAC[SUBSET; IN_NUMSEG_0; MODRNG; IN_ELIM_THM] THEN
+   REPEAT GEN_TAC THEN STRIP_TAC THEN GEN_TAC THEN
+   DISCH_THEN (CHOOSE_THEN (SUBST1_TAC o CONJUNCT1)) THEN
+   MP_TAC (SPECL[`a + d`;`m:num`] MOD_LT_EQ) THEN
+   ASM_ARITH_TAC);;
+
+let FINITE_MODRNG = prove
+  (`!m a b. FINITE (MODRNG0 m a b) <=> (m = 0 /\ a <= b) \/ ~(m = 0)`,
+   REPEAT GEN_TAC THEN ASM_CASES_TAC `m = 0` THENL
+   [POP_ASSUM (fun th -> REWRITE_TAC[th; MODRNG_ZERO; LT]) THEN
+    BOOL_CASES_TAC `a <= b` THEN REWRITE_TAC[FINITE_NUMSEG] THEN
+    REWRITE_TAC[GSYM INFINITE; INFINITE_ENUMERATE_SUBSET] THEN
+    EXISTS_TAC `\n. n + a` THEN REWRITE_TAC[IN_ELIM_THM] THEN
+    ARITH_TAC;
+    ASM_REWRITE_TAC[] THEN
+    MATCH_MP_TAC FINITE_SUBSET THEN
+    EXISTS_TAC `0..m - 1` THEN
+    ASM_SIMP_TAC[FINITE_NUMSEG; MODRNG_SUBSET_NUMSEG]]);;
+
 let MODRNG_REFL = prove
   (`!m a. MODRNG0 m a a = {a MOD m}`,
    REWRITE_TAC[MODRNG; EXTENSION; IN_ELIM_THM] THEN
@@ -74,6 +95,10 @@ let MODRNG_CONGR = prove
      POP_ASSUM (MP_TAC o C MATCH_MP th)) THEN
    ASM_REWRITE_TAC [CONTRAPOS_THM; CONG]);;
 
+let MODRNG_MODR = prove
+  (`!m a b. MODRNG0 m a (b MOD m) = MODRNG0 m a b`,
+   MESON_TAC[MODRNG_CONGR; CONG; MOD_MOD_REFL]);;
+
 (*
 
 let MODRNG0_THM = prove
@@ -85,15 +110,6 @@ let MODRNG0_THM = prove
 *)
 
 (* -------------------- *)
-
-let MODRNG_MODR = prove
-  (`!m a b. MODRNG0 m a (b MOD m) = MODRNG0 m a b`,
-   MESON_TAC[MODRNG_CONGR; CONG; MOD_MOD_REFL]);;
-
-let NUMSEG_TEST = prove
-  (`0..0 = {0}`,
-   REWRITE_TAC[numseg; LE; EXTENSION; IN_ELIM_THM] THEN
-   GEN_TAC THEN EQ_TAC THEN SIMP_TAC[COMPONENT; IN_SING; LE]);;
 
 new_type_abbrev("hash",`:(K->num)#(num->(K#V)option)#num`);;
 
