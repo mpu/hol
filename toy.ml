@@ -10,6 +10,18 @@ let MODRNG = new_definition
      {x | ?d. x = (a + d) MOD m /\
           !e. e < d ==> ~(b == a + e) (mod m)}`;;
 
+let MODRNG_ZERO = prove
+  (`!a b. MODRNG0 0 a b = if a <= b then a..b else {x | a <= x}`,
+   REWRITE_TAC[MODRNG; CONG; MOD_ZERO] THEN REPEAT GEN_TAC THEN
+   ASM_CASES_TAC `a <= b` THEN
+   ASM_REWRITE_TAC[EXTENSION; IN_ELIM_THM; IN_NUMSEG] THENL
+   [GEN_TAC THEN EQ_TAC THEN STRIP_TAC THENL
+    [FIRST_X_ASSUM (MP_TAC o SPEC `b - a`);
+     EXISTS_TAC `x - a`] THEN ASM_ARITH_TAC;
+    GEN_TAC THEN EQ_TAC THEN STRIP_TAC THENL
+    [ALL_TAC; EXISTS_TAC `x - a`] THEN
+    ASM_ARITH_TAC]);;
+
 let MODRNG_REFL = prove
   (`!m a. MODRNG0 m a a = {a MOD m}`,
    REWRITE_TAC[MODRNG; EXTENSION; IN_ELIM_THM] THEN
