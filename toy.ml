@@ -1,10 +1,4 @@
-(* Linear probing hash table *)
-
-(* Notes:
-   - Theorem for inductive types:
-     cases, injectivity, distinctness,
-*)
-
+(* Modular range *)
 let MODRNG = new_definition
   `MODRNG0 m a b =
      {x | ?d. x = (a + d) MOD m /\
@@ -137,20 +131,32 @@ let MODRNG_THM = prove
       DISCH_THEN (fun th -> FIRST_X_ASSUM (MP_TAC o C MATCH_MP th)) THEN
       REWRITE_TAC[ADD_CLAUSES]]]]);;
 
-(* A conversion computing using the equation of MODRNG_THM *)
 let rec NUM_MODRNG_CONV term =
   (REWR_CONV MODRNG_THM THENC
    DEPTH_CONV (REWR_CONV CONG) THENC
    DEPTH_CONV NUM_RED_CONV THENC
    TRY_CONV (RAND_CONV NUM_MODRNG_CONV)) term;;
 
-(*
-  NUM_MODRNG_CONV `MODRNG0 5 4 2`;;
-  NUM_MODRNG_CONV `MODRNG0 5 1 3`;;
+(* Some examples to try out:
+
+   NUM_MODRNG_CONV `MODRNG0 5 4 2`;;
+   NUM_MODRNG_CONV `MODRNG0 5 1 3`;;
 *)
 
+(* ------------------------------------------------------------------------- *)
+(* Linear probing hash tables.                                               *)
+(* ------------------------------------------------------------------------- *)
 
-(* -------------------- *)
+(*
+   A hash table has three components:
+   - a hash function from the key space K to num
+   - a table represented as a function from num to
+     entries; NONE is used to represent free entries
+     while SOME (k,v) represents a binding that maps
+     the key k to the value v
+   - a modulus; it is the max number of bindings in
+     the table
+*)
 
 new_type_abbrev("hash",`:(K->num)#(num->(K#V)option)#num`);;
 
@@ -158,30 +164,45 @@ let hmod = new_definition `hmod (h:hash) = SND (SND h)`;;
 let htbl = new_definition `htbl (h:hash) = FST (SND h)`;;
 let hfun = new_definition `hfun (h:hash) = (\x. FST h x MOD hmod h)`;;
 
-let HGETTER = prove
+let HGET = prove
   (`hfun (f,t,m) = (\x. f x MOD m) /\
     htbl (f,t,m) = t /\
     hmod (f,t,m) = m`,
    SIMP_TAC[hfun; htbl; hmod]);;
 
+let HFUN_LT_EQ = prove
+  (`!h k. hfun h k < hmod h <=> ~(hmod h = 0)`,
+   SIMP_TAC[FORALL_PAIR_THM; HGET; MOD_LT_EQ]);;
+
 let hnext = new_definition `hnext (h:hash) p = SUC p MOD hmod h`;;
 
-let HFINDLOOP = define
-  `HFINDLOOP h k p =
+let FINDLOOP = define
+  `FINDLOOP h k p =
      if htbl h p = NONE \/ (?v. htbl h p = SOME (k,v))
      then p
-     else HFINDLOOP h k (hnext h p)`;;
+     else FINDLOOP h k (hnext h p)`;;
 
-let HFIND = new_definition
-  `HFIND h k = htbl h (HFINDLOOP h k (hfun h k))`;;
+let FIND = new_definition
+  `FIND h k = htbl h (FINDLOOP h k (hfun h k))`;;
 
-let NFULL = new_definition
-  `NFULL h = ?p. p < hmod h /\ htbl h p = NONE`;;
+let NOTFULL = new_definition
+  `NOTFULL h = ?p. p < hmod h /\ htbl h p = NONE`;;
 
-(* a -- b *)
+(* A potiential healthiness invariant *)
+let INV0 = define
+  `INV0 h =
+    !p k v. p < hmod h /\ htbl h p = SOME (k,v) ==>
+    !q. q IN MODRNG0 (hmod h) (hfun h k) p /\ ~(q = p) ==>
+    ?kq vq. htbl h q = SOME (kq,vq) /\ ~(kq = k)`;;
 
-(* modular range *)
-let hrng = new_definition `hrng (h:hash) = RNG (hmod h)`;;
-
-(* (hfun k) -- (k,v) is a full interval *)
-let INV
+let INV0_FIND = prove
+  (`!(h:hash) k v p.
+      INV0 h /\ p < hmod h /\ htbl h p = SOME (k,v) ==>
+      FIND h k = SOME (k,v)`,
+   REPEAT GEN_TAC THEN DISCH_THEN ASSUME_TAC THEN
+   REWRITE_TAC[FIND] THEN
+   SUBGOAL_THEN `FINDLOOP (h:hash) k (hfun h k) = p`
+     (fun th -> ASM_REWRITE_TAC[th]) THEN
+   (* to prove that we need to perform an induction
+      on the segment ploop -- p *)
+   CHEAT_TAC);;
