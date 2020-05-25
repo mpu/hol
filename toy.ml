@@ -108,10 +108,10 @@ let MODRNG_THM = prove
   (`!m a b. MODRNG0 m a b =
       if (a == b) (mod m)
       then {a MOD m}
-      else {a MOD m} UNION MODRNG0 m (SUC a) b`,
+      else (a MOD m) INSERT MODRNG0 m (SUC a) b`,
    REPEAT GEN_TAC THEN ASM_CASES_TAC `(a == b) (mod m)` THEN
    ASM_SIMP_TAC[MODRNG_CONG] THEN
-   REWRITE_TAC[MODRNG; EXTENSION; IN_UNION; IN_SING; IN_ELIM_THM] THEN
+   REWRITE_TAC[MODRNG; EXTENSION; IN_INSERT; IN_ELIM_THM] THEN
    GEN_TAC THEN EQ_TAC THENL
    (* ==> *)
    [DISCH_THEN (CHOOSE_THEN MP_TAC) THEN
@@ -136,6 +136,19 @@ let MODRNG_THM = prove
       ASM_REWRITE_TAC[LT_SUC] THEN
       DISCH_THEN (fun th -> FIRST_X_ASSUM (MP_TAC o C MATCH_MP th)) THEN
       REWRITE_TAC[ADD_CLAUSES]]]]);;
+
+(* A conversion computing using the equation of MODRNG_THM *)
+let rec NUM_MODRNG_CONV term =
+  (REWR_CONV MODRNG_THM THENC
+   DEPTH_CONV (REWR_CONV CONG) THENC
+   DEPTH_CONV NUM_RED_CONV THENC
+   TRY_CONV (RAND_CONV NUM_MODRNG_CONV)) term;;
+
+(*
+  NUM_MODRNG_CONV `MODRNG0 5 4 2`;;
+  NUM_MODRNG_CONV `MODRNG0 5 1 3`;;
+*)
+
 
 (* -------------------- *)
 
