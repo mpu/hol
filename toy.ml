@@ -354,15 +354,14 @@ let MODRNG_SUC_PSUBSET = prove
 (* ------------------------------------------------------------------------- *)
 
 let MODLOOP_IND = prove
-  (`!P m y.
+  (`!m y P.
       ~(m = 0) /\ (!x. (x == y) (mod m) \/ P (SUC x) ==> P x) ==> !x. P x`,
    REPEAT GEN_TAC THEN STRIP_TAC THEN
    SUBGOAL_THEN `WF (MEASURE (\x. MODSUB2 m y x))` MP_TAC THENL
      [REWRITE_TAC[WF_MEASURE]; REWRITE_TAC[WF_IND]] THEN
    DISCH_THEN MATCH_MP_TAC THEN REWRITE_TAC[MEASURE] THEN
    GEN_TAC THEN ASM_CASES_TAC `(x == y) (mod m)` THENL
-   [DISCH_THEN (K ALL_TAC) THEN
-    FIRST_ASSUM MATCH_MP_TAC THEN
+   [DISCH_THEN (K ALL_TAC) THEN FIRST_ASSUM MATCH_MP_TAC THEN
     ASM_REWRITE_TAC[];
     DISCH_THEN (fun th ->
       FIRST_X_ASSUM MATCH_MP_TAC THEN
@@ -416,13 +415,25 @@ let FIND = new_definition
 let NOTFULL = new_definition
   `NOTFULL h = ?p. p < hmod h /\ htbl h p = NONE`;;
 
-(* A potiential healthiness invariant *)
+(* Describes the guts of a healthy hash table; we require
+   that for any key k, value v, position p, if the table
+   has the (k,v) binding at position p, then all entries
+   from from `hfun h k` to `p - 1` are non-empty and do
+   not bind the key `k` *)
 let INV0 = define
   `INV0 h =
     !p k v. p < hmod h /\ htbl h p = SOME (k,v) ==>
     !q. q IN MODRNG0 (hmod h) (hfun h k) p /\ ~(q = p) ==>
     ?kq vq. htbl h q = SOME (kq,vq) /\ ~(kq = k)`;;
 
+let hempty = define `hempty f m = (f,(\x. NONE),m)`;;
+
+let INV0_HEMPTY = prove
+  (`!f m. INV0 (hempty f m:hash)`,
+   REWRITE_TAC[INV0; hempty; HGET; distinctness "option"]);;
+
+(* If the invariant INV0 holds, then any binding (k,v) in the
+   hash table can be fetched using HFIND h k *)
 let INV0_FIND = prove
   (`!(h:hash) k v p.
       INV0 h /\ p < hmod h /\ htbl h p = SOME (k,v) ==>
@@ -431,6 +442,27 @@ let INV0_FIND = prove
    REWRITE_TAC[FIND] THEN
    SUBGOAL_THEN `FINDLOOP (h:hash) k (hfun h k) = p`
      (fun th -> ASM_REWRITE_TAC[th]) THEN
-   (* to prove that we need to perform an induction
-      on the segment ploop -- p *)
-   CHEAT_TAC);;
+   POP_ASSUM (CONJUNCTS_THEN2 MP_TAC ASSUME_TAC) THEN
+   REWRITE_TAC[INV0] THEN
+   DISCH_THEN (fun th -> FIRST_ASSUM (MP_TAC o MATCH_MP th)) THEN
+
+   (* add the MOD in the findloop argument; cleanup this crap! *)
+   SUBGOAL_THEN `hfun (h:hash) k < hmod h` ASSUME_TAC THENL
+     [ASM_REWRITE_TAC[HFUN_LT_EQ] THEN ASM_ARITH_TAC; ALL_TAC] THEN
+   FIRST_ASSUM (MP_TAC o GSYM o MATCH_MP MOD_LT) THEN
+   DISCH_THEN (fun th -> GEN_REWRITE_TAC (RAND_CONV o DEPTH_CONV) [th]) THEN
+   POP_ASSUM (K ALL_TAC) THEN
+
+   SPEC_TAC (`hfun (h:hash) k`,`c:num`) THEN
+   MATCH_MP_TAC (SPECL[`hmod (h:hash)`;`p:num`] MODLOOP_IND) THEN
+   CONJ_TAC THENL [ASM_ARITH_TAC; ALL_TAC] THEN
+   GEN_TAC THEN STRIP_TAC THENL
+   (* base case *)
+   [DISCH_THEN (K ALL_TAC) THEN
+    POP_ASSUM MP_TAC THEN SIMP_TAC[CONG] THEN
+    DISCH_THEN (K ALL_TAC) THEN
+    ASM_SIMP_TAC[MOD_LT] THEN
+    ONCE_REWRITE_TAC[FINDLOOP] THEN
+    ASM_REWRITE_TAC[injectivity"option"; MESON[]`?v'. k,v = k,v'`];
+   (* possibly recursive case *)
+    CHEAT_TAC]);;
