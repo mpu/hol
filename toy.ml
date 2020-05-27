@@ -143,10 +143,29 @@ let rec NUM_MODRNG_CONV term =
    NUM_MODRNG_CONV `MODRNG0 5 1 3`;;
 *)
 
-let MODSUB = define `MODSUB1 m a b = (a + m - b MOD m) MOD m`;;
+(* TODO:
+   - uniformize to (a == b) (mod m) or a MOD m = b MOD m
+*)
+
+let MODSUB = define `MODSUB2 m a b = ((a + m) - b MOD m) MOD m`;;
+
+let MODSUB_ZERO = prove
+  (`!a b. MODSUB2 0 a b = a - b`,
+   REWRITE_TAC[MODSUB; MOD_ZERO; ADD_CLAUSES]);;
+
+let MODSUB_NOT_ZERO = prove
+  (`!m a b. ~(m = 0) ==> MODSUB2 m a b = (a + m - b MOD m) MOD m`,
+   REPEAT STRIP_TAC THEN REWRITE_TAC[MODSUB] THEN
+   AP_THM_TAC THEN AP_TERM_TAC THEN
+   MP_TAC(SPECL[`b:num`;`m:num`] MOD_LT_EQ) THEN
+   ASM_REWRITE_TAC[] THEN ARITH_TAC);;
+
+let MODSUB_ALT = prove
+  (`!m a b. MODSUB2 m a b = if m = 0 then a - b else (a + m - b MOD m) MOD m`,
+   MESON_TAC[MODSUB_ZERO; MODSUB_NOT_ZERO]);;
 
 let MODSUB_LT_EQ = prove
-  (`!m a b. MODSUB1 m a b < m <=> ~(m = 0)`,
+  (`!m a b. MODSUB2 m a b < m <=> ~(m = 0)`,
    REWRITE_TAC[MODSUB; MOD_LT_EQ]);;
 
 (* TODO: Contribute this to arith.ml *)
@@ -165,18 +184,19 @@ let MOD_ADD_MODULUS = prove
    SIMP_TAC[MULT_CLAUSES]);;
 
 let MOD_MODSUB = prove
-  (`!m a b. MODSUB1 m a b MOD m = MODSUB1 m a b`,
+  (`!m a b. MODSUB2 m a b MOD m = MODSUB2 m a b`,
    REWRITE_TAC[MODSUB; MOD_MOD_REFL]);;
 
 let MODSUB_ADDL = prove
-  (`!m a b. ~(m = 0) ==> (b + MODSUB1 m a b) MOD m = a MOD m`,
-   ONCE_REWRITE_TAC [GSYM (MOD_DOWN_CONV`(b MOD m MOD m + x) MOD m`)] THEN
+  (`!m a b. ~(m = 0) ==> (b + MODSUB2 m a b) MOD m = a MOD m`,
+   ONCE_REWRITE_TAC[GSYM (MOD_DOWN_CONV `(b MOD m MOD m + x) MOD m`)] THEN
    REPEAT STRIP_TAC THEN REWRITE_TAC[MODSUB; MOD_ADD_MOD] THEN
-   MP_TAC (ARITH_RULE`b MOD m < m ==> b MOD m + a + m - b MOD m = a + m`) THEN
+   MP_TAC (ARITH_RULE `b MOD m < m ==>
+     b MOD m + (a + m) - b MOD m = a + m`) THEN
    ASM_SIMP_TAC[MOD_LT_EQ; MOD_ADD_MODULUS]);;
 
 let MODSUB_ADDR = prove
-  (`!m a b. ~(m = 0) ==> (MODSUB1 m a b + b) MOD m = a MOD m`,
+  (`!m a b. ~(m = 0) ==> (MODSUB2 m a b + b) MOD m = a MOD m`,
    ONCE_REWRITE_TAC[ADD_SYM] THEN MATCH_ACCEPT_TAC MODSUB_ADDL);;
 
 (* TODO: Contribute this to in int.ml *)
@@ -196,51 +216,74 @@ let CONG_LE_EQ = prove
       [ASM_ARITH_TAC; REWRITE_TAC[CONG; MOD_MULT_ADD]]]);;
 
 let [MODSUB_MODL; MODSUB_MODR] = (CONJUNCTS o prove)
-  (`(!m a b. MODSUB1 m (a MOD m) b = MODSUB1 m a b) /\
-    (!m a b. MODSUB1 m a (b MOD m) = MODSUB1 m a b)`,
-   REWRITE_TAC[MODSUB] THEN CONV_TAC MOD_DOWN_CONV THEN REWRITE_TAC[]);;
+  (`(!m a b. MODSUB2 m (a MOD m) b = MODSUB2 m a b) /\
+    (!m a b. MODSUB2 m a (b MOD m) = MODSUB2 m a b)`,
+   REWRITE_TAC[MODSUB_ALT] THEN CONJ_TAC THEN GEN_TAC THEN
+   CONV_TAC MOD_DOWN_CONV THEN ASM_CASES_TAC `m = 0` THEN
+   ASM_REWRITE_TAC[MOD_ZERO]);;
 
 let ADD_MODSUB2 = prove
-  (`!m a b. ~(m = 0) ==> MODSUB1 m (a + b) a = b MOD m`,
+  (`!m a b. ~(m = 0) ==> MODSUB2 m (a + b) a = b MOD m`,
    ONCE_REWRITE_TAC[MESON[MODSUB_MODL; MOD_ADD_MOD]
-     `MODSUB1 m (a + b) a = MODSUB1 m (a MOD m + b MOD m) a`] THEN
+     `MODSUB2 m (a + b) a = MODSUB2 m (a MOD m + b MOD m) a`] THEN
    REWRITE_TAC[MODSUB] THEN REPEAT STRIP_TAC THEN
    MP_TAC (ARITH_RULE `a MOD m < m ==>
-     (a MOD m + b MOD m) + m - a MOD m = b MOD m + m`) THEN
+     ((a MOD m + b MOD m) + m) - a MOD m = b MOD m + m`) THEN
    ASM_SIMP_TAC[MOD_LT_EQ; MOD_ADD_MODULUS; MOD_MOD_REFL]);;
+
+let MODSUB_EXISTS = prove
+  (`!m a b s. a MOD m = (b + s) MOD m <=>
+      (?k. s = MODSUB2 m a b + k * m) /\ (m = 0 ==> b <= a)`,
+   REPEAT GEN_TAC THEN EQ_TAC THENL
+   (* ==> *)
+   [ASM_CASES_TAC `m = 0` THENL
+      [ASM_REWRITE_TAC[MOD_ZERO; MODSUB_ZERO; MULT_CLAUSES; ADD_CLAUSES] THEN
+       ARITH_TAC; ASM_REWRITE_TAC[]] THEN
+    ONCE_REWRITE_TAC[GSYM MODSUB_MODL] THEN
+    DISCH_THEN SUBST1_TAC THEN
+    ONCE_REWRITE_TAC[GSYM (MOD_DOWN_CONV`(b MOD m + s) MOD m`)] THEN
+    REWRITE_TAC[MODSUB_MODL; MODSUB] THEN
+    REWRITE_TAC[MOD_ADD_MODULUS;
+      ARITH_RULE `(((b MOD m) + s) + m) - b MOD m = s + m`] THEN
+    ASM_MESON_TAC[DIVISION; ADD_SYM];
+   (* <== *)
+    STRIP_TAC THEN FIRST_X_ASSUM SUBST1_TAC THEN
+    REWRITE_TAC[ADD_ASSOC; MOD_MULT_ADD] THEN
+    ASM_CASES_TAC `m = 0` THENL
+    [ASM_REWRITE_TAC[MOD_ZERO; MODSUB_ZERO] THEN ASM_ARITH_TAC;
+     ASM_SIMP_TAC[MODSUB_ADDL]]]);;
+
+let MODSUB_UNIQ = prove
+  (`!m a b s. a MOD m = (b + s) MOD m /\ s < m ==> MODSUB2 m a b = s`,
+   REWRITE_TAC[MODSUB_EXISTS] THEN REPEAT STRIP_TAC THEN
+   FIRST_ASSUM SUBST1_TAC THEN
+   SUBGOAL_THEN `k = 0`
+     (fun th -> REWRITE_TAC[th; MULT_CLAUSES; ADD_CLAUSES]) THEN
+   POP_ASSUM MP_TAC THEN ONCE_REWRITE_TAC[GSYM CONTRAPOS_THM] THEN
+   ASM_REWRITE_TAC[NOT_LT] THEN
+   DISJ_CASES_THEN2 SUBST1_TAC (CHOOSE_THEN SUBST1_TAC)
+     (SPEC `k:num` num_CASES) THEN
+   REWRITE_TAC[MULT_CLAUSES] THEN ARITH_TAC);;
 
 let MODRNG_MODSUB = prove
   (`!m a b. ~(m = 0) ==>
-      MODRNG0 m a b = {x | x < m /\ MODSUB1 m x a <= MODSUB1 m b a}`,
+      MODRNG0 m a b = {x | x < m /\ MODSUB2 m x a <= MODSUB2 m b a}`,
    REWRITE_TAC[EXTENSION; MODRNG; IN_ELIM_THM] THEN
    REPEAT STRIP_TAC THEN EQ_TAC THENL
+   (* ==> *)
    [STRIP_TAC THEN FIRST_X_ASSUM SUBST1_TAC THEN
     ASM_SIMP_TAC[MODSUB_MODL; ADD_MODSUB2; MOD_LT_EQ] THEN
     POP_ASSUM MP_TAC THEN ONCE_REWRITE_TAC[GSYM CONTRAPOS_THM] THEN
     REWRITE_TAC[NOT_LE] THEN STRIP_TAC THEN CONV_TAC NNF_CONV THEN
-    EXISTS_TAC `MODSUB1 m b a` THEN CONJ_TAC THENL
+    EXISTS_TAC `MODSUB2 m b a` THEN CONJ_TAC THENL
     [TRANS_TAC LTE_TRANS `d MOD m` THEN ASM_REWRITE_TAC[MOD_LE];
      ASM_SIMP_TAC[CONG; MODSUB_ADDL]];
-    STRIP_TAC THEN EXISTS_TAC `MODSUB1 m x a` THEN CONJ_TAC THENL
+   (* <== *)
+    STRIP_TAC THEN EXISTS_TAC `MODSUB2 m x a` THEN CONJ_TAC THENL
     [MATCH_MP_TAC EQ_SYM THEN ASM_SIMP_TAC[MODSUB_ADDL; MOD_EQ_SELF];
      GEN_TAC THEN ONCE_REWRITE_TAC[GSYM CONTRAPOS_THM] THEN
-     REWRITE_TAC[CONG; NOT_CLAUSES; NOT_LT] THEN STRIP_TAC THEN
-     SUBGOAL_THEN `a + MODSUB1 m b a <= a + e /\
-                  (a + MODSUB1 m b a) MOD m = (a + e) MOD m` MP_TAC THENL
-       [ASM_SIMP_TAC[MODSUB_ADDL; LE_ADD_LCANCEL] THEN
-        TRANS_TAC LE_TRANS `e MOD m` THEN REWRITE_TAC[MOD_LE] THEN
-        MATCH_MP_TAC(ARITH_RULE `m = n ==> m <= n`) THEN
-        ONCE_REWRITE_TAC[GSYM MODSUB_MODL] THEN
-        POP_ASSUM SUBST1_TAC THEN
-        ONCE_REWRITE_TAC[GSYM MOD_ADD_MOD] THEN
-        REWRITE_TAC[MODSUB; MODSUB_MODL] THEN
-        MATCH_MP_TAC MOD_UNIQ THEN EXISTS_TAC `1` THEN
-        ASM_REWRITE_TAC[MOD_LT_EQ] THEN
-        MP_TAC (SPECL[`a:num`;`m:num`] MOD_LT_EQ) THEN
-        ASM_REWRITE_TAC[MULT_CLAUSES] THEN ARITH_TAC;
-        ALL_TAC] THEN
-     REWRITE_TAC[GSYM CONG; CONG_LE_EQ] THEN
-     DISCH_THEN (CHOOSE_THEN MP_TAC) THEN
+     REWRITE_TAC[CONG; NOT_CLAUSES; NOT_LT; MODSUB_EXISTS] THEN
+     DISCH_THEN (CONJUNCTS_THEN2 (CHOOSE_THEN SUBST1_TAC) (K ALL_TAC)) THEN
      ASM_ARITH_TAC]]);;
 
 (* There ought to be a simpler proof of that! *)
@@ -261,7 +304,7 @@ let MODRNG_SUC_PSUBSET = prove
    ASM_CASES_TAC `?k. d = (m - 1) + k * m` THENL
    (* ?k. d = m - 1 + m * k *)
    [POP_ASSUM (CHOOSE_THEN SUBST1_TAC) THEN DISJ2_TAC THEN
-    EXISTS_TAC `MODSUB1 m b (SUC a)` THEN CONJ_TAC THENL
+    EXISTS_TAC `MODSUB2 m b (SUC a)` THEN CONJ_TAC THENL
     (* first conjunct *)
     [TRANS_TAC LTE_TRANS `m - 1` THEN
      CONJ_TAC THENL [ALL_TAC; ARITH_TAC] THEN
