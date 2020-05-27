@@ -265,6 +265,24 @@ let MODSUB_UNIQ = prove
      (SPEC `k:num` num_CASES) THEN
    REWRITE_TAC[MULT_CLAUSES] THEN ARITH_TAC);;
 
+let MODSUB_SUC_LT = prove
+  (`!m a b s. ~(m = 0) /\ ~(a == b) (mod m) ==>
+      MODSUB2 m a (SUC b) < MODSUB2 m a b`,
+   REPEAT GEN_TAC THEN
+   ASM_CASES_TAC `m = 1` THENL [ASM_REWRITE_TAC[CONG; MOD_1]; STRIP_TAC] THEN
+   SUBGOAL_THEN `MODSUB2 m a b = SUC (MODSUB2 m a (SUC b))` MP_TAC THENL
+     [MATCH_MP_TAC MODSUB_UNIQ; ARITH_TAC] THEN
+   ASM_SIMP_TAC[ARITH_RULE `x + SUC y = SUC x + y`; MODSUB_ADDL] THEN
+   MATCH_MP_TAC(ARITH_RULE
+     `!x. x < m /\ ~(x = m - 1) /\ ~(m = 0) ==> SUC x < m`) THEN
+   ASM_REWRITE_TAC[MODSUB_LT_EQ] THEN
+   POP_ASSUM MP_TAC THEN REWRITE_TAC[CONTRAPOS_THM; CONG] THEN STRIP_TAC THEN
+   GEN_REWRITE_TAC RAND_CONV [GSYM (CONJUNCT1 MOD_ADD_MODULUS)] THEN
+   FIRST_ASSUM (SUBST1_TAC o MATCH_MP (ARITH_RULE
+     `~(m = 0) ==> b + m = SUC b + (m - 1)`)) THEN
+   POP_ASSUM (SUBST1_TAC o GSYM) THEN
+   ASM_SIMP_TAC[MODSUB_ADDL]);;
+
 let MODRNG_MODSUB = prove
   (`!m a b. ~(m = 0) ==>
       MODRNG0 m a b = {x | x < m /\ MODSUB2 m x a <= MODSUB2 m b a}`,
@@ -335,12 +353,23 @@ let MODRNG_SUC_PSUBSET = prove
 (* Induction principle for modular arithmetic.                               *)
 (* ------------------------------------------------------------------------- *)
 
-(*
 let MODLOOP_IND = prove
-  (`!P m b.
-    ~(m = 0) /\ (!a. ~(a == b) (mod m) /\ P (SUC a) ==> P a) ==> !p. P p`,
-   x
-*)
+  (`!P m y.
+      ~(m = 0) /\ (!x. (x == y) (mod m) \/ P (SUC x) ==> P x) ==> !x. P x`,
+   REPEAT GEN_TAC THEN STRIP_TAC THEN
+   SUBGOAL_THEN `WF (MEASURE (\x. MODSUB2 m y x))` MP_TAC THENL
+     [REWRITE_TAC[WF_MEASURE]; REWRITE_TAC[WF_IND]] THEN
+   DISCH_THEN MATCH_MP_TAC THEN REWRITE_TAC[MEASURE] THEN
+   GEN_TAC THEN ASM_CASES_TAC `(x == y) (mod m)` THENL
+   [DISCH_THEN (K ALL_TAC) THEN
+    FIRST_ASSUM MATCH_MP_TAC THEN
+    ASM_REWRITE_TAC[];
+    DISCH_THEN (fun th ->
+      FIRST_X_ASSUM MATCH_MP_TAC THEN
+      ASSUME_TAC th) THEN
+    DISJ2_TAC THEN FIRST_X_ASSUM MATCH_MP_TAC THEN
+    MATCH_MP_TAC MODSUB_SUC_LT THEN
+    ASM_MESON_TAC[CONG]]);;
 
 (* ------------------------------------------------------------------------- *)
 (* Linear probing hash tables.                                               *)
