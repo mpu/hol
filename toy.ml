@@ -359,24 +359,19 @@ let MODRNG_SUC_PSUBSET = prove
 (* ------------------------------------------------------------------------- *)
 
 let MODLOOP_IND = prove
-  (`!m y P. ~(m = 0) ==>
-      (!x. (x == y) (mod m) \/ (~(x == y) (mod m) /\ P (SUC x)) ==> P x) ==>
+  (`!m y P.
+      ~(m = 0) /\
+      (!x. (x == y) (mod m) ==> P x) /\
+      (!x. (~(x == y) (mod m) /\ P (SUC x)) ==> P x) ==>
       !x. P x`,
-   REPEAT GEN_TAC THEN STRIP_TAC THEN STRIP_TAC THEN
+   REPEAT GEN_TAC THEN DISCH_THEN (CONJUNCTS_THEN ASSUME_TAC) THEN
    SUBGOAL_THEN `WF (MEASURE (\x. MODSUB2 m y x))` MP_TAC THENL
      [REWRITE_TAC[WF_MEASURE]; REWRITE_TAC[WF_IND]] THEN
    DISCH_THEN MATCH_MP_TAC THEN REWRITE_TAC[MEASURE] THEN
-   GEN_TAC THEN ASM_CASES_TAC `(x == y) (mod m)` THENL
-   [DISCH_THEN (K ALL_TAC) THEN
-    FIRST_ASSUM MATCH_MP_TAC THEN
-    ASM_REWRITE_TAC[];
-    DISCH_THEN (fun th ->
-      FIRST_X_ASSUM MATCH_MP_TAC THEN
-      ASSUME_TAC th) THEN
-    ASM_REWRITE_TAC[] THEN
-    FIRST_X_ASSUM MATCH_MP_TAC THEN
-    MATCH_MP_TAC MODSUB_SUC_LT THEN
-    ASM_MESON_TAC[CONG]]);;
+   GEN_TAC THEN POP_ASSUM (CONJUNCTS_THEN (MP_TAC o SPEC `x:num`)) THEN
+   ASM_CASES_TAC `(x == y) (mod m)` THEN ASM_SIMP_TAC[] THEN
+   REWRITE_TAC[IMP_IMP] THEN DISCH_THEN (CONJUNCTS_THEN MATCH_MP_TAC) THEN
+   MATCH_MP_TAC MODSUB_SUC_LT THEN ASM_MESON_TAC[CONG]);;
 
 (* ------------------------------------------------------------------------- *)
 (* Linear probing hash tables.                                               *)
@@ -450,47 +445,41 @@ let INV0_FIND = prove
    REWRITE_TAC[FIND] THEN
    SUBGOAL_THEN `FINDLOOP (h:hash) k (hfun h k) = p`
      (fun th -> ASM_REWRITE_TAC[th]) THEN
+   (* from then on to the case analysis below we build an
+      inductive invariant to put in front of FINDLOOP h k c = p *)
    POP_ASSUM (CONJUNCTS_THEN2 MP_TAC ASSUME_TAC) THEN
    REWRITE_TAC[INV0] THEN
    DISCH_THEN (fun th -> FIRST_ASSUM (MP_TAC o MATCH_MP th)) THEN
-
-   (* add the MOD in the findloop argument; cleanup this crap! *)
-   SUBGOAL_THEN `hfun (h:hash) k < hmod h` ASSUME_TAC THENL
-     [ASM_REWRITE_TAC[HFUN_LT_EQ] THEN ASM_ARITH_TAC; ALL_TAC] THEN
-   FIRST_ASSUM (MP_TAC o GSYM o MATCH_MP MOD_LT) THEN
+   (* add the MOD in the findloop argument *)
+   SUBGOAL_THEN `hfun (h:hash) k = hfun h k MOD hmod h` MP_TAC THENL
+     [IMP_REWRITE_TAC[MOD_LT; HFUN_LT_EQ] THEN ASM_ARITH_TAC; ALL_TAC] THEN
    DISCH_THEN (fun th -> GEN_REWRITE_TAC (RAND_CONV o DEPTH_CONV) [th]) THEN
-   POP_ASSUM (K ALL_TAC) THEN
-
-   (* that's all god-ugly... *)
+   (* we are done crafting the invariant; we now turn to the induction *)
    SPEC_TAC (`hfun (h:hash) k`,`c:num`) THEN
-   SUBGOAL_THEN `~(hmod (h:hash) = 0)` MP_TAC THENL
-     [ASM_ARITH_TAC; ALL_TAC] THEN
-   DISCH_THEN (MATCH_MP_TAC o MATCH_MP
-     (SPECL[`hmod (h:hash)`;`p:num`] MODLOOP_IND)) THEN
-
-   REWRITE_TAC[CONG] THEN INTRO_TAC "!c; (cng | cng ind)" THENL
+   MATCH_MP_TAC (SPECL[`hmod (h:hash)`;`p:num`] MODLOOP_IND) THEN
+   CONJ_TAC THENL [ASM_ARITH_TAC; ALL_TAC] THEN
+   REWRITE_TAC[CONG] THEN CONJ_TAC THENL
    (* base case *)
    [ ASM_MESON_TAC[FINDLOOP; injectivity "option"; MOD_LT]
-   (* possibly recursive case *)
-   ; ASM_CASES_TAC `c MOD hmod (h:hash) = p` THENL
-       [REMOVE_THEN "cng" MP_TAC THEN ASM_SIMP_TAC[MOD_LT]; ALL_TAC] THEN
-     INTRO_TAC "inv" THEN ONCE_REWRITE_TAC[FINDLOOP] THEN
+   (* recursive case *)
+   ; GEN_TAC THEN STRIP_TAC THEN
+     STRIP_TAC THEN ONCE_REWRITE_TAC[FINDLOOP] THEN
      COND_CASES_TAC THENL
      (* we cannot get in the first branch at this point because
         so we derive a contradiction *)
-     [ POP_ASSUM DISJ_CASES_TAC THENL
-       [ ASM_MESON_TAC[distinctness "option"; LB_IN_MODRNG]
-       ; FIRST_ASSUM (MP_TAC o SPEC `c MOD hmod (h:hash)`) THEN
-         ASM_MESON_TAC[injectivity "option"; PAIR_EQ; LB_IN_MODRNG] ]
+     [ POP_ASSUM MP_TAC THEN ONCE_REWRITE_TAC[GSYM CONTRAPOS_THM] THEN
+       STRIP_TAC THEN FIRST_X_ASSUM (MP_TAC o SPEC `c MOD hmod (h:hash)`) THEN
+       ASM_REWRITE_TAC[LB_IN_MODRNG] THEN
+       ASM_MESON_TAC[injectivity "option"; distinctness "option"; PAIR_EQ]
+     (* in the recursive call use the induction hypothesis *)
      ; POP_ASSUM (K ALL_TAC) THEN
        REWRITE_TAC[hnext] THEN CONV_TAC MOD_DOWN_CONV THEN
-       FIRST_ASSUM MATCH_MP_TAC THEN
-       INTRO_TAC "!q; pre" THEN
-       REMOVE_THEN "inv" MATCH_MP_TAC THEN
-       POP_ASSUM (CONJUNCTS_THEN2 ASSUME_TAC (fun th -> REWRITE_TAC[th])) THEN
+       FIRST_X_ASSUM MATCH_MP_TAC THEN REPEAT STRIP_TAC THEN
+       FIRST_X_ASSUM MATCH_MP_TAC THEN
+       ASM_REWRITE_TAC[] THEN
        ONCE_REWRITE_TAC[MODRNG_THM] THEN
        SUBGOAL_THEN `~(c == p) (mod hmod (h:hash))`
          (fun th -> ASM_REWRITE_TAC[th; IN_INSERT]) THEN
-       ASM_SIMP_TAC[CONG; MOD_LT]
+       ASM_SIMP_TAC[CONG]
      ]
    ]);;
