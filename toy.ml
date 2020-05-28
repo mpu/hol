@@ -143,6 +143,11 @@ let rec NUM_MODRNG_CONV term =
    NUM_MODRNG_CONV `MODRNG0 5 1 3`;;
 *)
 
+let LB_IN_MODRNG = prove
+  (`!m a b. a MOD m IN MODRNG0 m a b`,
+   ONCE_REWRITE_TAC[MODRNG_THM] THEN REPEAT GEN_TAC THEN
+   COND_CASES_TAC THEN REWRITE_TAC[IN_INSERT]);;
+
 (* TODO:
    - uniformize to (a == b) (mod m) or a MOD m = b MOD m
 *)
@@ -354,19 +359,22 @@ let MODRNG_SUC_PSUBSET = prove
 (* ------------------------------------------------------------------------- *)
 
 let MODLOOP_IND = prove
-  (`!m y P.
-      ~(m = 0) /\ (!x. (x == y) (mod m) \/ P (SUC x) ==> P x) ==> !x. P x`,
-   REPEAT GEN_TAC THEN STRIP_TAC THEN
+  (`!m y P. ~(m = 0) ==>
+      (!x. (x == y) (mod m) \/ (~(x == y) (mod m) /\ P (SUC x)) ==> P x) ==>
+      !x. P x`,
+   REPEAT GEN_TAC THEN STRIP_TAC THEN STRIP_TAC THEN
    SUBGOAL_THEN `WF (MEASURE (\x. MODSUB2 m y x))` MP_TAC THENL
      [REWRITE_TAC[WF_MEASURE]; REWRITE_TAC[WF_IND]] THEN
    DISCH_THEN MATCH_MP_TAC THEN REWRITE_TAC[MEASURE] THEN
    GEN_TAC THEN ASM_CASES_TAC `(x == y) (mod m)` THENL
-   [DISCH_THEN (K ALL_TAC) THEN FIRST_ASSUM MATCH_MP_TAC THEN
+   [DISCH_THEN (K ALL_TAC) THEN
+    FIRST_ASSUM MATCH_MP_TAC THEN
     ASM_REWRITE_TAC[];
     DISCH_THEN (fun th ->
       FIRST_X_ASSUM MATCH_MP_TAC THEN
       ASSUME_TAC th) THEN
-    DISJ2_TAC THEN FIRST_X_ASSUM MATCH_MP_TAC THEN
+    ASM_REWRITE_TAC[] THEN
+    FIRST_X_ASSUM MATCH_MP_TAC THEN
     MATCH_MP_TAC MODSUB_SUC_LT THEN
     ASM_MESON_TAC[CONG]]);;
 
@@ -453,16 +461,36 @@ let INV0_FIND = prove
    DISCH_THEN (fun th -> GEN_REWRITE_TAC (RAND_CONV o DEPTH_CONV) [th]) THEN
    POP_ASSUM (K ALL_TAC) THEN
 
+   (* that's all god-ugly... *)
    SPEC_TAC (`hfun (h:hash) k`,`c:num`) THEN
-   MATCH_MP_TAC (SPECL[`hmod (h:hash)`;`p:num`] MODLOOP_IND) THEN
-   CONJ_TAC THENL [ASM_ARITH_TAC; ALL_TAC] THEN
-   GEN_TAC THEN STRIP_TAC THENL
+   SUBGOAL_THEN `~(hmod (h:hash) = 0)` MP_TAC THENL
+     [ASM_ARITH_TAC; ALL_TAC] THEN
+   DISCH_THEN (MATCH_MP_TAC o MATCH_MP
+     (SPECL[`hmod (h:hash)`;`p:num`] MODLOOP_IND)) THEN
+
+   REWRITE_TAC[CONG] THEN INTRO_TAC "!c; (cng | cng ind)" THENL
    (* base case *)
-   [DISCH_THEN (K ALL_TAC) THEN
-    POP_ASSUM MP_TAC THEN SIMP_TAC[CONG] THEN
-    DISCH_THEN (K ALL_TAC) THEN
-    ASM_SIMP_TAC[MOD_LT] THEN
-    ONCE_REWRITE_TAC[FINDLOOP] THEN
-    ASM_REWRITE_TAC[injectivity"option"; MESON[]`?v'. k,v = k,v'`];
+   [ ASM_MESON_TAC[FINDLOOP; injectivity "option"; MOD_LT]
    (* possibly recursive case *)
-    CHEAT_TAC]);;
+   ; ASM_CASES_TAC `c MOD hmod (h:hash) = p` THENL
+       [REMOVE_THEN "cng" MP_TAC THEN ASM_SIMP_TAC[MOD_LT]; ALL_TAC] THEN
+     INTRO_TAC "inv" THEN ONCE_REWRITE_TAC[FINDLOOP] THEN
+     COND_CASES_TAC THENL
+     (* we cannot get in the first branch at this point because
+        so we derive a contradiction *)
+     [ POP_ASSUM DISJ_CASES_TAC THENL
+       [ ASM_MESON_TAC[distinctness "option"; LB_IN_MODRNG]
+       ; FIRST_ASSUM (MP_TAC o SPEC `c MOD hmod (h:hash)`) THEN
+         ASM_MESON_TAC[injectivity "option"; PAIR_EQ; LB_IN_MODRNG] ]
+     ; POP_ASSUM (K ALL_TAC) THEN
+       REWRITE_TAC[hnext] THEN CONV_TAC MOD_DOWN_CONV THEN
+       FIRST_ASSUM MATCH_MP_TAC THEN
+       INTRO_TAC "!q; pre" THEN
+       REMOVE_THEN "inv" MATCH_MP_TAC THEN
+       POP_ASSUM (CONJUNCTS_THEN2 ASSUME_TAC (fun th -> REWRITE_TAC[th])) THEN
+       ONCE_REWRITE_TAC[MODRNG_THM] THEN
+       SUBGOAL_THEN `~(c == p) (mod hmod (h:hash))`
+         (fun th -> ASM_REWRITE_TAC[th; IN_INSERT]) THEN
+       ASM_SIMP_TAC[CONG; MOD_LT]
+     ]
+   ]);;
