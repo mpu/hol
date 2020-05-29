@@ -158,17 +158,6 @@ let MODSUB_ZERO = prove
   (`!a b. MODSUB2 0 a b = a - b`,
    REWRITE_TAC[MODSUB; MOD_ZERO; ADD_CLAUSES]);;
 
-let MODSUB_NOT_ZERO = prove
-  (`!m a b. ~(m = 0) ==> MODSUB2 m a b = (a + m - b MOD m) MOD m`,
-   REPEAT STRIP_TAC THEN REWRITE_TAC[MODSUB] THEN
-   AP_THM_TAC THEN AP_TERM_TAC THEN
-   MP_TAC(SPECL[`b:num`;`m:num`] MOD_LT_EQ) THEN
-   ASM_REWRITE_TAC[] THEN ARITH_TAC);;
-
-let MODSUB_ALT = prove
-  (`!m a b. MODSUB2 m a b = if m = 0 then a - b else (a + m - b MOD m) MOD m`,
-   MESON_TAC[MODSUB_ZERO; MODSUB_NOT_ZERO]);;
-
 let MODSUB_LT_EQ = prove
   (`!m a b. MODSUB2 m a b < m <=> ~(m = 0)`,
    REWRITE_TAC[MODSUB; MOD_LT_EQ]);;
@@ -223,9 +212,12 @@ let CONG_LE_EQ = prove
 let [MODSUB_MODL; MODSUB_MODR] = (CONJUNCTS o prove)
   (`(!m a b. MODSUB2 m (a MOD m) b = MODSUB2 m a b) /\
     (!m a b. MODSUB2 m a (b MOD m) = MODSUB2 m a b)`,
-   REWRITE_TAC[MODSUB_ALT] THEN CONJ_TAC THEN GEN_TAC THEN
-   CONV_TAC MOD_DOWN_CONV THEN ASM_CASES_TAC `m = 0` THEN
-   ASM_REWRITE_TAC[MOD_ZERO]);;
+   REWRITE_TAC[MODSUB; MOD_MOD_REFL] THEN
+   REPEAT GEN_TAC THEN ASM_CASES_TAC `m = 0` THENL [
+     ASM_REWRITE_TAC[MOD_ZERO] THEN ARITH_TAC;
+     IMP_REWRITE_TAC[ARITH_RULE `c < b ==> (a + b) - c = a + b - c`] THEN
+     CONV_TAC MOD_DOWN_CONV THEN ASM_REWRITE_TAC[MOD_LT_EQ]
+   ]);;
 
 let MODSUB_REFL = prove
   (`!m x. MODSUB2 m x x = 0`,
