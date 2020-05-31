@@ -1,3 +1,5 @@
+prioritize_int();;
+
 let INT_SUB_1_REM = prove
   (`!m x. (x - &1) rem m = if x rem m = &0 then abs m - &1 else x rem m - &1`,
    REPEAT GEN_TAC THEN ASM_CASES_TAC `m = &0` THENL
@@ -29,6 +31,112 @@ let MODSUB_ADD_1 = prove
    POP_ASSUM MP_TAC THEN REWRITE_TAC[CONTRAPOS_THM] THEN
    REWRITE_TAC[INT_REM_EQ_0; int_divides; int_congruent]);;
 
+let MODSEG = define
+  `MODSEG m a b =
+    if a MOD m <= b MOD m
+    then {x | (m = 0 \/ x < m) /\
+              (a MOD m <= x MOD m /\
+               x MOD m <= b MOD m)}
+    else {x | (m = 0 \/ x < m) /\
+              (a MOD m <= x MOD m \/
+               x MOD m <= b MOD m)}`;;
+
+let MODSEG_ZERO =
+  (SPEC_ALL o REWRITE_RULE[MOD_ZERO] o SPEC `0:num` o GEN `m:num`) MODSEG;;
+
+let NUM_SUB_REM_CASES = prove
+  (`!m a b. ~(m = 0) ==>
+      (&b - &a) rem &m =
+      &(if a MOD m <= b MOD m
+        then b MOD m - a MOD m
+        else b MOD m + m - a MOD m)`,
+   REPEAT STRIP_TAC THEN
+   SUBGOAL_THEN `!x. x MOD m < m` MP_TAC THENL
+     [ASM_REWRITE_TAC[MOD_LT_EQ_LT; LT_NZ]; ALL_TAC] THEN
+   DISCH_THEN (fun th -> MAP_EVERY (ASSUME_TAC o C SPEC th)
+     [`a:num`;`b:num`]) THEN
+   ONCE_REWRITE_TAC[GSYM INT_SUB_REM] THEN
+   REWRITE_TAC[INT_OF_NUM_REM] THEN
+   REPEAT GEN_TAC THEN COND_CASES_TAC THENL
+   [ IMP_REWRITE_TAC[INT_OF_NUM_SUB] THEN
+     REWRITE_TAC[INT_OF_NUM_REM; INT_OF_NUM_EQ; MOD_EQ_SELF] THEN
+     ASM_ARITH_TAC;
+     ONCE_REWRITE_TAC[INT_ARITH `x - y = -- (y - x)`] THEN
+     REWRITE_TAC[INT_REM_LNEG] THEN IMP_REWRITE_TAC[INT_OF_NUM_SUB] THEN
+     REWRITE_TAC[INT_OF_NUM_REM; INT_OF_NUM_EQ; INT_ABS_NUM] THEN
+     SUBGOAL_THEN `(a MOD m - b MOD m) MOD m = a MOD m - b MOD m`
+       SUBST1_TAC THENL
+     [ REWRITE_TAC[MOD_EQ_SELF] THEN ASM_ARITH_TAC;
+       COND_CASES_TAC THEN
+       IMP_REWRITE_TAC[INT_OF_NUM_SUB; INT_OF_NUM_EQ] THEN
+       ASM_ARITH_TAC ] ]);;
+
+let MODSEG_NON_ZERO = prove
+  (`!m a b. ~(m = 0) ==>
+      MODSEG m a b = {x | x < m /\ (&x - &a) rem &m <= (&b - &a) rem &m}`,
+   SIMP_TAC[MODSEG; EXTENSION] THEN REPEAT STRIP_TAC THEN
+   IMP_REWRITE_TAC[NUM_SUB_REM_CASES; INT_OF_NUM_LE] THEN
+   REPEAT COND_CASES_TAC THEN REWRITE_TAC[IN_ELIM_THM] THEN
+   ASM_ARITH_TAC);;
+
+let FIRST_IN_MODSEG = prove
+  (`!m a b. a MOD m IN MODSEG m a b`,
+   REPEAT GEN_TAC THEN REWRITE_TAC[MODSEG] THEN COND_CASES_TAC THEN
+   ASM_REWRITE_TAC[IN_ELIM_THM; MOD_MOD_REFL; LE_REFL] THEN
+   REWRITE_TAC[MOD_LT_EQ_LT] THEN ARITH_TAC);;
+
+(* TODO: generalize *)
+let MODSEG_REC = prove
+  (`!m a b. ~(m = 0) ==>
+      MODSEG m a b =
+      if (a == b) (mod m)
+      then {a MOD m}
+      else a MOD m INSERT MODSEG m (SUC a) b`,
+   REWRITE_TAC[CONG; EXTENSION] THEN REPEAT STRIP_TAC THEN
+   ASM_SIMP_TAC[MODSEG_NON_ZERO] THEN
+   COND_CASES_TAC THEN REWRITE_TAC[IN_ELIM_THM; IN_SING; IN_INSERT] THENL
+   [ ASM_SIMP_TAC[NUM_SUB_REM_CASES; SUB_REFL; LE_REFL; INT_OF_NUM_LE;
+       MESON[MOD_EQ_SELF] `~(m = 0) ==> (n < m <=> n = n MOD m)`] THEN
+     EQ_TAC THEN SIMP_TAC[MOD_MOD_REFL; LE_REFL; SUB_REFL] THEN ASM_ARITH_TAC;
+     (* --- *)
+     ASM_SIMP_TAC[
+       MESON[MOD_EQ_SELF] `~(m = 0) ==> (n < m <=> n = n MOD m)`] THEN
+     EQ_TAC THEN STRIP_TAC THEN ASM_SIMP_TAC[MOD_MOD_REFL] THENL
+     [ FIRST_X_ASSUM SUBST1_TAC THEN REWRITE_TAC[MOD_MOD_REFL] THEN
+       ASM_CASES_TAC `x MOD m = a MOD m` THEN ASM_REWRITE_TAC[] THEN
+       REWRITE_TAC[GSYM INT_OF_NUM_REM; GSYM INT_OF_NUM_SUC] THEN
+       ONCE_REWRITE_TAC[GSYM INT_SUB_REM] THEN
+       MAP_EVERY REWRITE_TAC [[INT_REM_REM]; [INT_SUB_REM]] THEN
+       IMP_REWRITE_TAC[MODSUB_ADD_1] THEN
+       REWRITE_TAC[GSYM num_congruent; CONG] THEN
+       REPEAT CONJ_TAC THENL
+         [ASM_INT_ARITH_TAC; ASM_MESON_TAC[]; ASM_MESON_TAC[]];
+       (* --- *)
+       REWRITE_TAC[GSYM INT_OF_NUM_REM; GSYM INT_OF_NUM_SUC] THEN
+       ONCE_REWRITE_TAC[GSYM INT_SUB_REM] THEN
+       MAP_EVERY REWRITE_TAC [[INT_REM_REM]; [INT_SUB_REM]] THEN
+       REWRITE_TAC[INT_SUB_REFL; INT_REM_ZERO] THEN
+       MATCH_MP_TAC INT_REM_POS THEN
+       ASM_REWRITE_TAC[INT_OF_NUM_EQ];
+       (* --- *)
+       CONJ_TAC THENL [FIRST_ASSUM ACCEPT_TAC; ALL_TAC] THEN
+       POP_ASSUM MP_TAC THEN
+       REWRITE_TAC[GSYM INT_OF_NUM_REM; GSYM INT_OF_NUM_SUC] THEN
+       ASM_CASES_TAC `(&x == &a) (mod &m)` THENL
+       [ DISCH_THEN (K ALL_TAC) THEN
+         POP_ASSUM MP_TAC THEN REWRITE_TAC[int_congruent] THEN
+         DISCH_THEN (CHOOSE_THEN SUBST1_TAC) THEN
+         REWRITE_TAC[INT_REM_MUL] THEN
+         ASM_SIMP_TAC[INT_REM_POS; INT_OF_NUM_EQ];
+         IMP_REWRITE_TAC[MODSUB_ADD_1] THEN
+         REWRITE_TAC[GSYM num_congruent; CONG] THEN
+         ONCE_REWRITE_TAC[EQ_SYM_EQ] THEN
+         ASM_SIMP_TAC[] THEN INT_ARITH_TAC ]
+     ]
+   ]);;
+
+prioritize_num();;
+
 let MODLOOP_IND = prove
   (`!m y P.
       ~(m = 0) /\
@@ -46,9 +154,3 @@ let MODLOOP_IND = prove
    ASM_SIMP_TAC[INT_REM_POS; INT_OF_NUM_OF_INT; INT_OF_NUM_EQ] THEN
    REWRITE_TAC[GSYM INT_OF_NUM_SUC] THEN IMP_REWRITE_TAC[MODSUB_ADD_1] THEN
    CONJ_TAC THENL [INT_ARITH_TAC; ASM_MESON_TAC[num_congruent; CONG]]);;
-
-(* --------- *)
-
-let MODSEG = define
-  `modseg3 m a b =
-    {x | &x < &m /\ (&x - &a) rem &m <= (&b - &a) rem &m}`;;
