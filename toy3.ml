@@ -7,12 +7,6 @@ let MODSEG_rules, MODSEG_induct, MODSEG_cases = new_inductive_definition
    (!m a b x. ~(a MOD m = b MOD m) /\ MODSEG m (SUC a) b x ==>
               MODSEG m a b x)`;;
 
-let MODSEG_CONG = prove
-  (`!m a b. a MOD m = b MOD m ==> MODSEG m a b = {a MOD m}`,
-   REWRITE_TAC[EXTENSION; IN_SING; IN] THEN
-   ONCE_REWRITE_TAC[MODSEG_cases] THEN
-   SIMP_TAC[]);;
-
 let MODSEG_REC = prove
   (`!m a b. MODSEG m a b =
       if a MOD m = b MOD m
@@ -27,97 +21,6 @@ let MODSEG_REC = prove
 let LB_IN_MODSEG = prove
   (`!m a b. a MOD m IN MODSEG m a b`,
    REWRITE_TAC[IN; MODSEG_rules]);;
-
-(* TODO: contribute to iterate.ml *)
-let NUMSEG_REC2 = prove
-  (`!a b. a <= b ==> a..b = a INSERT ((SUC a)..b)`,
-   REWRITE_TAC[LE_EXISTS; LEFT_IMP_EXISTS_THM] THEN
-   REPEAT GEN_TAC THEN DISCH_THEN SUBST1_TAC THEN
-   MAP_EVERY (fun t -> SPEC_TAC(t,t)) [`a:num`;`d:num`] THEN
-   INDUCT_TAC THEN GEN_TAC THEN REWRITE_TAC[ADD_CLAUSES] THENL
-   [REWRITE_TAC[NUMSEG_SING] THEN
-    SUBGOAL_THEN `SUC a..a = {}` (fun th -> REWRITE_TAC[th]) THEN
-    REWRITE_TAC[EXTENSION; IN_NUMSEG; NOT_IN_EMPTY] THEN ARITH_TAC;
-    IMP_REWRITE_TAC[NUMSEG_REC] THEN REWRITE_TAC[GSYM CONJ_ASSOC] THEN
-    CONJ_TAC THENL [SET_TAC[]; ARITH_TAC]]);;
-
-(* A big proof, but only used to be precise in FINITE_MODSEG *)
-let MODSEG_0 = prove
-  (`!a b. MODSEG 0 a b = if a <= b then a..b else {x | a <= x}`,
-   REWRITE_TAC[EXTENSION] THEN REPEAT GEN_TAC THEN
-   COND_CASES_TAC THENL
-   (* a..b *)
-   [POP_ASSUM MP_TAC THEN REWRITE_TAC[LE_EXISTS] THEN
-    DISCH_THEN (CHOOSE_THEN MP_TAC) THEN
-    MAP_EVERY (fun t -> SPEC_TAC (t,t))
-      [`b:num`;`a:num`;`d:num`] THEN
-    INDUCT_TAC THEN REPEAT GEN_TAC THENL
-    [DISCH_THEN SUBST1_TAC THEN
-     REWRITE_TAC[ADD_0; NUMSEG_SING] THEN
-     GEN_REWRITE_TAC LAND_CONV [IN] THEN
-     ONCE_REWRITE_TAC[MODSEG_cases] THEN
-     SIMP_TAC[MOD_ZERO; IN_SING];
-     DISCH_THEN SUBST1_TAC THEN
-     GEN_REWRITE_TAC LAND_CONV [IN] THEN
-     ONCE_REWRITE_TAC[MODSEG_cases] THEN
-     POP_ASSUM (MP_TAC o SPECL [`SUC a`;`SUC (a + d)`]) THEN
-     REWRITE_TAC[ADD_CLAUSES; MOD_ZERO] THEN
-     GEN_REWRITE_TAC (LAND_CONV o LAND_CONV) [IN] THEN
-     DISCH_THEN SUBST1_TAC THEN
-     MP_TAC (SPECL [`a:num`;`SUC (a + d)`] NUMSEG_REC2) THEN
-     REWRITE_TAC[ARITH_RULE`~(a = SUC (a + d)) /\ a <= SUC (a + d)`] THEN
-     DISCH_THEN SUBST1_TAC THEN SET_TAC[]];
-   (* {x | a <= x} *)
-    GEN_REWRITE_TAC LAND_CONV [IN] THEN
-    REWRITE_TAC[IN_ELIM_THM] THEN
-    EQ_TAC THENL
-    [POP_ASSUM (MP_TAC o REWRITE_RULE[NOT_LE]) THEN
-     ABBREV_TAC `m = 0` THEN POP_ASSUM (MP_TAC o GSYM) THEN
-     REWRITE_TAC[IMP_IMP] THEN ONCE_REWRITE_TAC[IMP_CONJ_ALT] THEN
-     MAP_EVERY (fun t -> SPEC_TAC (t,t))
-       [`x:num`;`b:num`;`a:num`;`m:num`] THEN
-     MATCH_MP_TAC MODSEG_induct THEN CONJ_TAC THENL
-     [ARITH_TAC;
-      REPEAT STRIP_TAC THEN
-      FIRST_ASSUM (fun th ->
-        REPEAT (POP_ASSUM MP_TAC) THEN
-        SUBST1_TAC th) THEN
-      REWRITE_TAC[MOD_ZERO] THEN
-      ARITH_TAC];
-     REWRITE_TAC[LE_EXISTS] THEN
-     DISCH_THEN (CHOOSE_THEN SUBST1_TAC) THEN
-     POP_ASSUM MP_TAC THEN
-     MAP_EVERY (fun t -> SPEC_TAC (t,t)) [`a:num`;`d:num`] THEN
-     INDUCT_TAC THEN REWRITE_TAC[ADD_0] THENL
-     [REPEAT STRIP_TAC THEN
-      MATCH_ACCEPT_TAC
-        ((REWRITE_RULE[MOD_ZERO] o SPEC `0` o CONJUNCT1) MODSEG_rules);
-      GEN_TAC THEN POP_ASSUM (MP_TAC o SPEC `SUC a`) THEN
-      REWRITE_TAC[NOT_LE; ADD_CLAUSES] THEN REPEAT STRIP_TAC THEN
-      MATCH_MP_TAC (CONJUNCT2 MODSEG_rules) THEN
-      REWRITE_TAC[MOD_ZERO] THEN
-      CONJ_TAC THEN TRY (FIRST_X_ASSUM MATCH_MP_TAC) THEN
-      ASM_ARITH_TAC]]]);;
-
-let MODSEG_SUBSET_NUMSEG = prove
-  (`!m a b. ~(m = 0) ==> MODSEG m a b SUBSET 0..m - 1`,
-   REWRITE_TAC[SUBSET; RIGHT_IMP_FORALL_THM; IMP_IMP; IN] THEN
-   REWRITE_TAC[IMP_CONJ_ALT] THEN MATCH_MP_TAC MODSEG_induct THEN
-   CONJ_TAC THEN REPEAT STRIP_TAC THEN
-   REWRITE_TAC[numseg; IN_ELIM_THM] THEN ASM_ARITH_TAC);;
-
-let FINITE_MODSEG = prove
-  (`!m a b. FINITE (MODSEG m a b) <=> (m = 0 /\ a <= b) \/ ~(m = 0)`,
-   REPEAT GEN_TAC THEN ASM_CASES_TAC `m = 0` THENL
-   [POP_ASSUM (fun th -> REWRITE_TAC[th; MODSEG_0; LT]) THEN
-    BOOL_CASES_TAC `a <= b` THEN REWRITE_TAC[FINITE_NUMSEG] THEN
-    REWRITE_TAC[GSYM INFINITE; INFINITE_ENUMERATE_SUBSET] THEN
-    EXISTS_TAC `\n. n + a` THEN REWRITE_TAC[IN_ELIM_THM] THEN
-    ARITH_TAC;
-    ASM_REWRITE_TAC[] THEN
-    MATCH_MP_TAC FINITE_SUBSET THEN
-    EXISTS_TAC `0..m - 1` THEN
-    ASM_SIMP_TAC[FINITE_NUMSEG; MODSEG_SUBSET_NUMSEG]]);;
 
 (*****************************************************************************)
 (* Modular distance and induction principle for loops in modular arithmetic  *)
