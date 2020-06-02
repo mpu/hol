@@ -22,6 +22,47 @@ let LB_IN_MODSEG = prove
   (`!m a b. a MOD m IN MODSEG m a b`,
    REWRITE_TAC[IN; MODSEG_rules]);;
 
+let CONG_SUC = prove
+  (`!m a b. a MOD m = b MOD m ==> SUC a MOD m = SUC b MOD m`,
+   GEN_TAC THEN
+   ASM_CASES_TAC `m = 0` THENL
+     [ASM_REWRITE_TAC[MOD_ZERO] THEN ARITH_TAC;
+      ALL_TAC] THEN
+   ASM_CASES_TAC `m = 1` THENL
+     [ASM_REWRITE_TAC[MOD_1] THEN ARITH_TAC;
+      ALL_TAC] THEN
+   REPEAT GEN_TAC THEN REWRITE_TAC[ADD1] THEN
+   ONCE_REWRITE_TAC[GSYM MOD_ADD_MOD] THEN
+   IMP_REWRITE_TAC[MOD_ADD_CASES] THEN
+   ASM_ARITH_TAC);;
+
+let MODSEG_CONG_lemma = prove
+  (`!m a1 b1 x. MODSEG m a1 b1 x ==>
+      !a2 b2. a2 MOD m = a1 MOD m /\ b2 MOD m = b1 MOD m ==>
+        MODSEG m a2 b2 x`,
+   MATCH_MP_TAC MODSEG_induct THEN
+   CONJ_TAC THEN REPEAT GEN_TAC THENL
+   [DISCH_THEN (fun th -> REWRITE_TAC[GSYM th]) THEN
+    REWRITE_TAC[MODSEG_rules];
+    REPEAT STRIP_TAC THEN
+    ONCE_REWRITE_TAC[MODSEG_cases] THEN
+    DISJ2_TAC THEN ASM_REWRITE_TAC[] THEN
+    FIRST_X_ASSUM MATCH_MP_TAC THEN
+    IMP_REWRITE_TAC[CONG_SUC]]);;
+
+let MODSEG_CONG = prove
+  (`!m a1 b1 a2 b2. a1 MOD m = a2 MOD m /\ b1 MOD m = b2 MOD m ==>
+      MODSEG m a1 b1 = MODSEG m a2 b2`,
+   REWRITE_TAC[FUN_EQ_THM] THEN MESON_TAC[MODSEG_CONG_lemma]);;
+
+let MODSEG_MODR = prove
+  (`!m a b. MODSEG m a (b MOD m) = MODSEG m a b`,
+   MESON_TAC[MODSEG_CONG; MOD_MOD_REFL]);;
+
+let MODSEG_MODL = prove
+  (`!m a b. MODSEG m (a MOD m) b = MODSEG m a b`,
+   MESON_TAC[MODSEG_CONG; MOD_MOD_REFL]);;
+
 (*****************************************************************************)
 (* Modular distance and induction principle for loops in modular arithmetic  *)
 (*****************************************************************************)
@@ -123,18 +164,28 @@ let FIND = new_definition
 let NOTFULL = new_definition
   `NOTFULL h = ?p. p < hmod h /\ htbl h p = NONE`;;
 
+let CHAIN = define
+  `CHAIN h k a b =
+    !p. q IN MODSEG (hmod h) a b /\ ~(p = b) ==>
+    ?kp vp. htbl h p = SOME (kp,vp) /\ ~(kp = k)`;;
+
 (* Describes the guts of a healthy hash table; we require
    that for any key k, value v, position p, if the table
    has the (k,v) binding at position p, then all entries
    from from `hfun h k` to `p - 1` are non-empty and do
    not bind the key `k` *)
 let INV = define
-  `INV1 h =
-    !p k v. p < hmod h /\ htbl h p = SOME (k,v) ==>
-    !q. q IN MODSEG (hmod h) (hfun h k) p /\ ~(q = p) ==>
-    ?kq vq. htbl h q = SOME (kq,vq) /\ ~(kq = k)`;;
+  `INV1 h = !p k v.
+    p < hmod h /\ htbl h p = SOME (k,v) ==>
+    CHAIN h k (hfun h k) p`;;
 
 let hempty = define `hempty f m = (f,(\x. NONE),m)`;;
+
+let FINDLOOP_SPEC = prove
+  (`!(h:hash) k a.
+      let b = FINDLOOP h k a in
+      (htbl h b = NONE \/ ?v. htbl h b = SOME (k,v)) /\
+      CHAIN h k a b`
 
 let INV_HEMPTY = prove
   (`!f m. INV1 (hempty f m:hash)`,
