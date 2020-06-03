@@ -1,69 +1,4 @@
 (*****************************************************************************)
-(* Modular segment                                                           *)
-(*****************************************************************************)
-
-let MODSEG_rules, MODSEG_induct, MODSEG_cases = new_inductive_definition
-  `(!m a b. MODSEG m a b (a MOD m)) /\
-   (!m a b x. ~(a MOD m = b MOD m) /\ MODSEG m (SUC a) b x ==>
-              MODSEG m a b x)`;;
-
-let MODSEG_REC = prove
-  (`!m a b. MODSEG m a b =
-      if a MOD m = b MOD m
-      then {a MOD m}
-      else (a MOD m) INSERT MODSEG m (SUC a) b`,
-   REWRITE_TAC[EXTENSION] THEN REPEAT GEN_TAC THEN
-   GEN_REWRITE_TAC LAND_CONV [IN] THEN
-   ONCE_REWRITE_TAC[MODSEG_cases] THEN
-   COND_CASES_TAC THEN REWRITE_TAC[IN_SING; IN_INSERT] THEN
-   REWRITE_TAC[IN]);;
-
-let LB_IN_MODSEG = prove
-  (`!m a b. a MOD m IN MODSEG m a b`,
-   REWRITE_TAC[IN; MODSEG_rules]);;
-
-let CONG_SUC = prove
-  (`!m a b. a MOD m = b MOD m ==> SUC a MOD m = SUC b MOD m`,
-   GEN_TAC THEN
-   ASM_CASES_TAC `m = 0` THENL
-     [ASM_REWRITE_TAC[MOD_ZERO] THEN ARITH_TAC;
-      ALL_TAC] THEN
-   ASM_CASES_TAC `m = 1` THENL
-     [ASM_REWRITE_TAC[MOD_1] THEN ARITH_TAC;
-      ALL_TAC] THEN
-   REPEAT GEN_TAC THEN REWRITE_TAC[ADD1] THEN
-   ONCE_REWRITE_TAC[GSYM MOD_ADD_MOD] THEN
-   IMP_REWRITE_TAC[MOD_ADD_CASES] THEN
-   ASM_ARITH_TAC);;
-
-let MODSEG_CONG_lemma = prove
-  (`!m a1 b1 x. MODSEG m a1 b1 x ==>
-      !a2 b2. a2 MOD m = a1 MOD m /\ b2 MOD m = b1 MOD m ==>
-        MODSEG m a2 b2 x`,
-   MATCH_MP_TAC MODSEG_induct THEN
-   CONJ_TAC THEN REPEAT GEN_TAC THENL
-   [DISCH_THEN (fun th -> REWRITE_TAC[GSYM th]) THEN
-    REWRITE_TAC[MODSEG_rules];
-    REPEAT STRIP_TAC THEN
-    ONCE_REWRITE_TAC[MODSEG_cases] THEN
-    DISJ2_TAC THEN ASM_REWRITE_TAC[] THEN
-    FIRST_X_ASSUM MATCH_MP_TAC THEN
-    IMP_REWRITE_TAC[CONG_SUC]]);;
-
-let MODSEG_CONG = prove
-  (`!m a1 b1 a2 b2. a1 MOD m = a2 MOD m /\ b1 MOD m = b2 MOD m ==>
-      MODSEG m a1 b1 = MODSEG m a2 b2`,
-   REWRITE_TAC[FUN_EQ_THM] THEN MESON_TAC[MODSEG_CONG_lemma]);;
-
-let MODSEG_MODR = prove
-  (`!m a b. MODSEG m a (b MOD m) = MODSEG m a b`,
-   MESON_TAC[MODSEG_CONG; MOD_MOD_REFL]);;
-
-let MODSEG_MODL = prove
-  (`!m a b. MODSEG m (a MOD m) b = MODSEG m a b`,
-   MESON_TAC[MODSEG_CONG; MOD_MOD_REFL]);;
-
-(*****************************************************************************)
 (* Modular distance and induction principle for loops in modular arithmetic  *)
 (*****************************************************************************)
 
@@ -118,6 +53,102 @@ let MODLOOP_IND = prove
    ASM_SIMP_TAC[INT_REM_POS; INT_OF_NUM_OF_INT; INT_OF_NUM_EQ] THEN
    REWRITE_TAC[GSYM INT_OF_NUM_SUC] THEN IMP_REWRITE_TAC[MODSUB_ADD_1] THEN
    CONJ_TAC THENL [INT_ARITH_TAC; ASM_MESON_TAC[num_congruent; CONG]]);;
+
+(*****************************************************************************)
+(* Modular segment                                                           *)
+(*****************************************************************************)
+
+let MODSEG_rules, MODSEG_induct, MODSEG_cases = new_inductive_definition
+  `(!m a b. MODSEG m a b (a MOD m)) /\
+   (!m a b x. ~(a MOD m = b MOD m) /\ MODSEG m (SUC a) b x ==>
+              MODSEG m a b x)`;;
+
+let MODSEG_REC = prove
+  (`!m a b. MODSEG m a b =
+      if a MOD m = b MOD m
+      then {a MOD m}
+      else (a MOD m) INSERT MODSEG m (SUC a) b`,
+   REWRITE_TAC[EXTENSION] THEN REPEAT GEN_TAC THEN
+   GEN_REWRITE_TAC LAND_CONV [IN] THEN
+   ONCE_REWRITE_TAC[MODSEG_cases] THEN
+   COND_CASES_TAC THEN REWRITE_TAC[IN_SING; IN_INSERT] THEN
+   REWRITE_TAC[IN]);;
+
+let MODSEG_REFL = prove
+  (`!m a b. a MOD m = b MOD m ==> MODSEG m a b = {a MOD m}`,
+    ONCE_REWRITE_TAC[MODSEG_REC] THEN SIMP_TAC[]);;
+
+let LB_IN_MODSEG = prove
+  (`!m a b. a MOD m IN MODSEG m a b`,
+   REWRITE_TAC[IN; MODSEG_rules]);;
+
+let CONG_SUC = prove
+  (`!m a b. SUC a MOD m = SUC b MOD m <=> a MOD m = b MOD m`,
+   GEN_TAC THEN
+   ASM_CASES_TAC `m = 0` THENL
+     [ASM_REWRITE_TAC[MOD_ZERO] THEN ARITH_TAC; ALL_TAC] THEN
+   ASM_CASES_TAC `m = 1` THENL
+     [ASM_REWRITE_TAC[MOD_1] THEN ARITH_TAC; ALL_TAC] THEN
+   REPEAT GEN_TAC THEN REWRITE_TAC[ADD1] THEN
+   ONCE_REWRITE_TAC[GSYM MOD_ADD_MOD] THEN
+   IMP_REWRITE_TAC[MOD_ADD_CASES] THEN
+   SUBGOAL_THEN `a MOD m < m /\ b MOD m < m` MP_TAC THENL
+     [ASM_REWRITE_TAC[MOD_LT_EQ]; ALL_TAC] THEN
+   SUBGOAL_THEN `1 MOD m = 1` SUBST1_TAC THENL
+     [REWRITE_TAC[MOD_EQ_SELF] THEN ASM_ARITH_TAC; ALL_TAC] THEN
+   SUBGOAL_THEN `1 < m` MP_TAC THENL [ASM_ARITH_TAC; ALL_TAC] THEN
+   MAP_EVERY SPEC_TAC [(`a MOD m`,`A:num`);(`b MOD m`,`B:num`)] THEN
+   SIMP_TAC[] THEN ARITH_TAC);;
+
+let MODSEG_CONG_lemma = prove
+  (`!m a1 b1 x. MODSEG m a1 b1 x ==>
+      !a2 b2. a2 MOD m = a1 MOD m /\ b2 MOD m = b1 MOD m ==>
+        MODSEG m a2 b2 x`,
+   MATCH_MP_TAC MODSEG_induct THEN
+   CONJ_TAC THEN REPEAT GEN_TAC THENL
+   [DISCH_THEN (fun th -> REWRITE_TAC[GSYM th]) THEN
+    REWRITE_TAC[MODSEG_rules];
+    REPEAT STRIP_TAC THEN
+    ONCE_REWRITE_TAC[MODSEG_cases] THEN
+    DISJ2_TAC THEN ASM_REWRITE_TAC[] THEN
+    FIRST_X_ASSUM MATCH_MP_TAC THEN
+    IMP_REWRITE_TAC[CONG_SUC]]);;
+
+let MODSEG_CONG = prove
+  (`!m a1 b1 a2 b2. a1 MOD m = a2 MOD m /\ b1 MOD m = b2 MOD m ==>
+      MODSEG m a1 b1 = MODSEG m a2 b2`,
+   REWRITE_TAC[FUN_EQ_THM] THEN MESON_TAC[MODSEG_CONG_lemma]);;
+
+let MODSEG_MODR = prove
+  (`!m a b. MODSEG m a (b MOD m) = MODSEG m a b`,
+   MESON_TAC[MODSEG_CONG; MOD_MOD_REFL]);;
+
+let MODSEG_MODL = prove
+  (`!m a b. MODSEG m (a MOD m) b = MODSEG m a b`,
+   MESON_TAC[MODSEG_CONG; MOD_MOD_REFL]);;
+
+let MODSEG_SUCR = prove
+  (`!m a b. ~(m = 0) /\ ~(a MOD m = SUC b MOD m) ==>
+      MODSEG m a (SUC b) = SUC b MOD m INSERT MODSEG m a b`,
+   REPEAT GEN_TAC THEN
+   DISCH_THEN (CONJUNCTS_THEN2 ASSUME_TAC MP_TAC) THEN
+   SPEC_TAC (`a:num`,`a:num`) THEN
+   MP_TAC (SPECL[`m:num`;`SUC b`] MODLOOP_IND) THEN
+   FIRST_ASSUM (fun th -> REWRITE_TAC[th; CONG]) THEN
+   DISCH_THEN MATCH_MP_TAC THEN 
+   CONJ_TAC THEN REPEAT STRIP_TAC THENL
+     [ASM_MESON_TAC[]; ALL_TAC] THEN
+   GEN_REWRITE_TAC LAND_CONV [MODSEG_REC] THEN
+   ASM_SIMP_TAC[] THEN
+   ASM_CASES_TAC `a MOD m = b MOD m` THENL
+   [FIRST_X_ASSUM (K ALL_TAC o check (is_imp o concl)) THEN
+    IMP_REWRITE_TAC[MODSEG_REFL] THEN
+    FIRST_ASSUM (MP_TAC o ONCE_REWRITE_RULE[GSYM CONG_SUC]) THEN
+    SET_TAC[];
+    FIRST_ASSUM (MP_TAC o ONCE_REWRITE_RULE[GSYM CONG_SUC]) THEN
+    DISCH_THEN (fun th -> FIRST_X_ASSUM (SUBST1_TAC o C MATCH_MP th)) THEN
+    GEN_REWRITE_TAC (RAND_CONV o ONCE_DEPTH_CONV) [MODSEG_REC] THEN
+    ASM_REWRITE_TAC[] THEN SET_TAC[]]);;
 
 (* ------------------------------------------------------------------------- *)
 (* Linear probing hash tables.                                               *)
