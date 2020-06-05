@@ -127,6 +127,8 @@ let MODSEG_MODL = prove
   (`!m a b. MODSEG m (a MOD m) b = MODSEG m a b`,
    MESON_TAC[MODSEG_CONG; MOD_MOD_REFL]);;
 
+(* valid, but let's see if we need it
+
 let MODSEG_SUCR = prove
   (`!m a b. ~(m = 0) /\ ~(a MOD m = SUC b MOD m) ==>
       MODSEG m a (SUC b) = SUC b MOD m INSERT MODSEG m a b`,
@@ -149,6 +151,8 @@ let MODSEG_SUCR = prove
     DISCH_THEN (fun th -> FIRST_X_ASSUM (SUBST1_TAC o C MATCH_MP th)) THEN
     GEN_REWRITE_TAC (RAND_CONV o ONCE_DEPTH_CONV) [MODSEG_REC] THEN
     ASM_REWRITE_TAC[] THEN SET_TAC[]]);;
+
+*)
 
 (* ------------------------------------------------------------------------- *)
 (* Linear probing hash tables.                                               *)
@@ -181,23 +185,21 @@ let HFUN_LT_EQ = prove
   (`!h k. hfun h k < hmod h <=> ~(hmod h = 0)`,
    SIMP_TAC[FORALL_PAIR_THM; HGET; MOD_LT_EQ]);;
 
-let hnext = new_definition `hnext (h:hash) p = SUC p MOD hmod h`;;
-
 let FINDLOOP = define
   `FINDLOOP h k p =
      if htbl h p = NONE \/ (?v. htbl h p = SOME (k,v))
      then p
-     else FINDLOOP h k (hnext h p)`;;
+     else FINDLOOP h k (SUC p MOD (hmod h))`;;
 
 let FIND = new_definition
   `FIND h k = htbl h (FINDLOOP h k (hfun h k))`;;
 
 let NOTFULL = new_definition
-  `NOTFULL h = ?p. p < hmod h /\ htbl h p = NONE`;;
+  `NOTFULL h = ?e. e < hmod h /\ htbl h e = NONE`;;
 
 let CHAIN = define
   `CHAIN h k a b =
-    !p. q IN MODSEG (hmod h) a b /\ ~(p = b) ==>
+    !p. p IN MODSEG (hmod h) a b /\ ~(p = b) ==>
     ?kp vp. htbl h p = SOME (kp,vp) /\ ~(kp = k)`;;
 
 (* Describes the guts of a healthy hash table; we require
@@ -212,15 +214,120 @@ let INV = define
 
 let hempty = define `hempty f m = (f,(\x. NONE),m)`;;
 
+let NOTFULL_HMOD = prove
+  (`!h. NOTFULL h ==> ~(hmod h = 0) /\ NOTFULL h`,
+   SIMP_TAC[] THEN REWRITE_TAC[NOTFULL] THEN ARITH_TAC);;
+
+let CHAIN_REFL = prove
+  (`!h k a. a < hmod h ==> CHAIN h k a a`,
+   REWRITE_TAC[CHAIN] THEN REPEAT GEN_TAC THEN
+   DISCH_THEN (MP_TAC o MATCH_MP
+     (MESON[MOD_EQ_SELF]`m < n ==> m MOD n = m`)) THEN
+   IMP_REWRITE_TAC[MODSEG_REFL; IN_SING]);;
+
+let CHAIN_REC = prove
+  (`!(h:hash) k a b ka va.
+      ~(a MOD hmod h = b MOD hmod h) /\
+      CHAIN h k (SUC a MOD hmod h) b /\
+      htbl h (a MOD hmod h) = SOME (ka,va) /\ ~(ka = k) ==>
+      CHAIN h k (a MOD hmod h) b`,
+   REWRITE_TAC[CHAIN; RIGHT_IMP_FORALL_THM] THEN
+   REPEAT GEN_TAC THEN ASM_CASES_TAC `p = a MOD hmod (h:hash)` THENL
+   [POP_ASSUM SUBST1_TAC THEN
+    INTRO_TAC "_ _ a b; _" THEN
+    FIRST_X_ASSUM SUBST1_TAC THEN
+    REWRITE_TAC[injectivity"option"; PAIR_EQ] THEN
+    ASM_MESON_TAC[];
+    STRIP_TAC THEN
+    ONCE_REWRITE_TAC[MODSEG_REC] THEN
+    CONV_TAC MOD_DOWN_CONV THEN
+    ASM_REWRITE_TAC[IN_INSERT] THEN
+    ONCE_REWRITE_TAC[GSYM MODSEG_MODL] THEN
+    CONV_TAC MOD_DOWN_CONV THEN
+    DISCH_THEN (fun th ->
+      FIRST_X_ASSUM (ACCEPT_TAC o C MATCH_MP th))]);;
+
 let FINDLOOP_SPEC = prove
-  (`!(h:hash) k a.
+  (`!(h:hash) k a. NOTFULL h /\ a < hmod h ==>
       let b = FINDLOOP h k a in
+      b < hmod h /\
       (htbl h b = NONE \/ ?v. htbl h b = SOME (k,v)) /\
-      CHAIN h k a b`
+      CHAIN h k a b`,
+   REPEAT GEN_TAC THEN
+   let mod_lemma = MESON[MOD_EQ_SELF] `m < n ==> m MOD n = m`
+   in
+   DISCH_THEN (CONJUNCTS_THEN2
+     (STRIP_ASSUME_TAC o MATCH_MP NOTFULL_HMOD)
+     (SUBST1_TAC o GSYM o MATCH_MP mod_lemma)) THEN
+   POP_ASSUM (STRIP_ASSUME_TAC o REWRITE_RULE[NOTFULL]) THEN
+   REWRITE_TAC[LET_DEF; LET_END_DEF] THEN
+   SPEC_TAC (`b:num`,`b:num`) THEN
+   SPEC_TAC (`a:num`,`a:num`) THEN
+   MP_TAC (SPECL[`hmod (h:hash)`;`e:num`] MODLOOP_IND) THEN
+   ASM_REWRITE_TAC[] THEN DISCH_THEN MATCH_MP_TAC THEN
+   REWRITE_TAC[CONG] THEN
+   CONJ_TAC THEN REPEAT GEN_TAC THENL
+   (* base case of the modular induction; we are
+      on the empty cell given by NOTFULL *)
+   [DISCH_THEN SUBST1_TAC THEN
+    FIRST_ASSUM (SUBST1_TAC o MATCH_MP mod_lemma) THEN
+    ONCE_REWRITE_TAC[FINDLOOP] THEN ASM_REWRITE_TAC[] THEN
+    MATCH_MP_TAC CHAIN_REFL THEN FIRST_ASSUM ACCEPT_TAC;
+   (* harder cases, we simply know that we are not on the
+      empty cell given by NOTFULL *)
+    DISCH_THEN (MAP_EVERY ASSUME_TAC o CONJUNCTS) THEN
+    REPEAT CONJ_TAC THENL
+    (* b < hmod h *)
+    [ONCE_REWRITE_TAC[FINDLOOP] THEN
+     COND_CASES_TAC THENL
+     [ASM_REWRITE_TAC[MOD_LT_EQ];
+      CONV_TAC MOD_DOWN_CONV THEN
+      FIRST_ASSUM MATCH_ACCEPT_TAC];
+    (* htbl h b *)
+     ONCE_REWRITE_TAC[FINDLOOP] THEN
+     COND_CASES_TAC THEN
+     CONV_TAC MOD_DOWN_CONV THEN
+     FIRST_ASSUM MATCH_ACCEPT_TAC;
+    (* CHAIN *)
+     ONCE_REWRITE_TAC[FINDLOOP] THEN
+     COND_CASES_TAC THENL
+       [IMP_REWRITE_TAC[CHAIN_REFL; MOD_LT_EQ]; ALL_TAC] THEN
+     (* recursive call, assemble the two pieces
+        of the chain *)
+     (* turn the negated condition into something more
+        usable *)
+     SUBGOAL_THEN
+       `!X. ~(X = NONE \/ ?(v:V). X = SOME ((k:K),v)) ==>
+            (?ka va. X = SOME (ka,va) /\ ~(ka = k))`
+       (fun th -> FIRST_ASSUM (CHOOSE_THEN (CHOOSE_THEN ASSUME_TAC) o
+                  MATCH_MP th)) THENL
+     [ POP_ASSUM_LIST (K ALL_TAC) THEN
+       GEN_TAC THEN
+       REWRITE_TAC[DE_MORGAN_THM] THEN
+       DISCH_THEN (CONJUNCTS_THEN2 ASSUME_TAC MP_TAC) THEN
+       POP_ASSUM (
+        CHOOSE_THEN (CHOOSE_THEN SUBST1_TAC) o
+        MATCH_MP (MESON[cases"option"; PAIR]
+          `~(X = NONE) ==> ?kx vx. X = SOME (kx, vx)`)) THEN
+       REWRITE_TAC[injectivity"option"; PAIR_EQ] THEN
+       MESON_TAC[];
+       ALL_TAC ] THEN
+      MATCH_MP_TAC CHAIN_REC THEN
+      MAP_EVERY EXISTS_TAC [`ka:K`; `va:V`] THEN
+      CONV_TAC MOD_DOWN_CONV THEN
+      ASM_SIMP_TAC[MOD_LT] THEN
+      (* show that FINDLOOP h k (SUC a) cannot be a *)
+      MAP_EVERY POP_ASSUM [K ALL_TAC; MP_TAC; K ALL_TAC] THEN
+      REWRITE_TAC[CONTRAPOS_THM] THEN
+      DISCH_THEN (fun th ->
+        POP_ASSUM_LIST (MP_TAC o end_itlist CONJ o rev) THEN
+        SUBST1_TAC (GSYM th) THEN
+        DISCH_THEN (MAP_EVERY ASSUME_TAC o CONJUNCTS)) THEN
+      POP_ASSUM MP_TAC THEN MESON_TAC[]]]);;
 
 let INV_HEMPTY = prove
   (`!f m. INV1 (hempty f m:hash)`,
-   REWRITE_TAC[INV; hempty; HGET; distinctness "option"]);;
+   REWRITE_TAC[INV; hempty; HGET; distinctness"option"]);;
 
 (* If the invariant INV holds, then any binding (k,v) in the
    hash table can be fetched using HFIND h k *)
