@@ -1,5 +1,5 @@
 (*****************************************************************************)
-(* Modular distance and induction principle for loops in modular arithmetic  *)
+(* An induction principle for loops in modular arithmetic.                   *)
 (*****************************************************************************)
 
 prioritize_int();;
@@ -55,7 +55,7 @@ let MODLOOP_IND = prove
    CONJ_TAC THENL [INT_ARITH_TAC; ASM_MESON_TAC[num_congruent; CONG]]);;
 
 (*****************************************************************************)
-(* Modular segment                                                           *)
+(* Modular segments.                                                         *)
 (*****************************************************************************)
 
 let MODSEG_rules, MODSEG_induct, MODSEG_cases = new_inductive_definition
@@ -194,6 +194,23 @@ let FINDLOOP = define
 let FIND = new_definition
   `FIND h k = htbl h (FINDLOOP h k (hfun h k))`;;
 
+let hset = new_definition
+  `hset (h:hash) p bnd = 
+    (FST h,(\q. if q = p then bnd else htbl h q),hmod h)`;;
+
+let HSET = prove
+  (`(hfun (hset (h:hash) p bnd) = hfun h) /\
+    (htbl (hset (h:hash) p bnd) =
+      \q. if q = p then bnd else htbl h q) /\
+    (hmod (hset (h:hash) p bnd) = hmod h)`,
+   SPEC_TAC (`h:hash`,`h:hash`) THEN
+   REWRITE_TAC[FORALL_PAIR_THM; HGET; hset]);;
+
+let ADD = new_definition
+  `ADD h k v =
+    let p = FINDLOOP h k (hfun h k) in
+    hset h p (SOME (k,v))`;;
+
 let NOTFULL = new_definition
   `NOTFULL h = ?e. e < hmod h /\ htbl h e = NONE`;;
 
@@ -329,20 +346,13 @@ let INV_HEMPTY = prove
   (`!f m. INV1 (hempty f m:hash)`,
    REWRITE_TAC[INV; hempty; HGET; distinctness"option"]);;
 
-(* If the invariant INV holds, then any binding (k,v) in the
-   hash table can be fetched using HFIND h k *)
-let INV_FIND = prove
+let INV_FINDLOOP = prove
   (`!(h:hash) k v p.
       INV1 h /\ p < hmod h /\ htbl h p = SOME (k,v) ==>
-      FIND h k = SOME (k,v)`,
-   REPEAT GEN_TAC THEN DISCH_THEN ASSUME_TAC THEN
-   REWRITE_TAC[FIND] THEN
-   SUBGOAL_THEN `FINDLOOP (h:hash) k (hfun h k) = p`
-     (fun th -> ASM_REWRITE_TAC[th]) THEN
-   (* from then on to the case analysis below we build an
-      inductive invariant to put in front of FINDLOOP h k c = p *)
-   POP_ASSUM (CONJUNCTS_THEN2 MP_TAC ASSUME_TAC) THEN
-   REWRITE_TAC[INV] THEN
+      FINDLOOP h k (hfun h k) = p`,
+   REPEAT GEN_TAC THEN
+   DISCH_THEN (CONJUNCTS_THEN2 MP_TAC ASSUME_TAC) THEN
+   REWRITE_TAC[INV; CHAIN] THEN
    DISCH_THEN (fun th -> FIRST_ASSUM (MP_TAC o MATCH_MP th)) THEN
    (* add the MOD in the findloop argument *)
    SUBGOAL_THEN `hfun (h:hash) k = hfun h k MOD hmod h` MP_TAC THENL
@@ -367,7 +377,7 @@ let INV_FIND = prove
        ASM_MESON_TAC[injectivity "option"; distinctness "option"; PAIR_EQ];
      (* in the recursive call use the induction hypothesis *)
        POP_ASSUM (K ALL_TAC) THEN
-       REWRITE_TAC[hnext] THEN CONV_TAC MOD_DOWN_CONV THEN
+       CONV_TAC MOD_DOWN_CONV THEN
        FIRST_X_ASSUM MATCH_MP_TAC THEN REPEAT STRIP_TAC THEN
        FIRST_X_ASSUM MATCH_MP_TAC THEN
        ASM_REWRITE_TAC[] THEN
@@ -376,3 +386,57 @@ let INV_FIND = prove
          ASSUME_TAC THEN ASM_REWRITE_TAC[IN_INSERT]
      ]
    ]);;
+
+(* If the invariant INV holds, then any binding (k,v) in the
+   hash table can be fetched using HFIND h k *)
+let INV_FIND = prove
+  (`!(h:hash) k v p.
+      INV1 h /\ p < hmod h /\ htbl h p = SOME (k,v) ==>
+      FIND h k = SOME (k,v)`,
+   REPEAT GEN_TAC THEN DISCH_THEN ASSUME_TAC THEN
+   REWRITE_TAC[FIND] THEN
+   SUBGOAL_THEN `FINDLOOP (h:hash) k (hfun h k) = p`
+     (fun th -> ASM_REWRITE_TAC[th]) THEN
+   ASM_MESON_TAC[INV_FINDLOOP]);;
+
+let CHAIN_SET_LAST = prove
+  (`!(h:hash) k a b v.
+      CHAIN h k a b ==> CHAIN (hset h b (SOME (k,v))) k a b`,
+   SIMP_TAC[CHAIN; HSET]);;
+
+let CHAIN_SET_OTHER = prove
+  (`!(h:hash) p ka va k a b.
+    ~(k = ka) /\ CHAIN h k a b ==> CHAIN (hset h p (SOME (ka,va))) k a b`,
+   SIMP_TAC[CHAIN; HSET] THEN
+   REPEAT GEN_TAC THEN STRIP_TAC THEN GEN_TAC THEN
+   POP_ASSUM (fun th -> DISCH_THEN (MP_TAC o MATCH_MP th)) THEN
+   STRIP_TAC THEN ASM_MESON_TAC[]);;
+
+let ADD_INV = prove
+  (`!(h:hash) ka va. NOTFULL h /\ INV1 h ==> INV1 (ADD h ka va)`,
+    REPEAT STRIP_TAC THEN
+    REWRITE_TAC[ADD; INV; LET_DEF; LET_END_DEF; HSET] THEN
+    REPEAT GEN_TAC THEN COND_CASES_TAC THENL
+    (* we're looking at the updated pos *)
+    (* the core argument is a lemma about setting the last
+       position of a chain for k to SOME (k,v) *)
+    [REWRITE_TAC[injectivity"option"; PAIR_EQ] THEN
+     DISCH_THEN (MP_TAC o GSYM) THEN
+     DISCH_THEN (CONJUNCTS_THEN ASSUME_TAC) THEN
+     POP_ASSUM (CONJUNCTS_THEN SUBST1_TAC) THEN
+     FIRST_ASSUM SUBST1_TAC THEN
+     MATCH_MP_TAC CHAIN_SET_LAST THEN
+     MP_TAC (SPECL[`h:hash`;`ka:K`;`(hfun (h:hash) ka)`] FINDLOOP_SPEC) THEN
+     FIRST_ASSUM (MP_TAC o MATCH_MP NOTFULL_HMOD) THEN
+     SIMP_TAC[HFUN_LT_EQ; LET_DEF; LET_END_DEF];
+    (* we're looking at something else *)
+     POP_ASSUM (fun th -> POP_ASSUM MP_TAC THEN ASSUME_TAC th) THEN
+     REWRITE_TAC[IMP_IMP] THEN
+     ASM_CASES_TAC `(k:K) = ka` THENL
+     [POP_ASSUM SUBST1_TAC THEN
+      DISCH_THEN (MP_TAC o MATCH_MP INV_FINDLOOP) THEN
+      POP_ASSUM (MP_TAC o GSYM) THEN SIMP_TAC[];
+      DISCH_THEN (CONJUNCTS_THEN (ASSUME_TAC o REWRITE_RULE[INV])) THEN
+      FIRST_X_ASSUM (fun th -> POP_ASSUM (MP_TAC o MATCH_MP th)) THEN
+      POP_ASSUM MP_TAC THEN REWRITE_TAC[IMP_IMP] THEN
+      MATCH_ACCEPT_TAC CHAIN_SET_OTHER]]);;
