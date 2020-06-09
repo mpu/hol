@@ -175,15 +175,9 @@ let hmod = new_definition `hmod (h:hash) = SND (SND h)`;;
 let htbl = new_definition `htbl (h:hash) = FST (SND h)`;;
 let hfun = new_definition `hfun (h:hash) = (\x. FST h x MOD hmod h)`;;
 
-let HGET = prove
-  (`hfun (f,t,m) = (\x. f x MOD m) /\
-    htbl (f,t,m) = t /\
-    hmod (f,t,m) = m`,
-   SIMP_TAC[hfun; htbl; hmod]);;
-
-let HFUN_LT_EQ = prove
-  (`!h k. hfun h k < hmod h <=> ~(hmod h = 0)`,
-   SIMP_TAC[FORALL_PAIR_THM; HGET; MOD_LT_EQ]);;
+let hset = new_definition
+  `hset (h:hash) p bnd = 
+    (FST h,(\q. if q = p then bnd else htbl h q),hmod h)`;;
 
 let FINDLOOP = define
   `FINDLOOP h k p =
@@ -193,18 +187,6 @@ let FINDLOOP = define
 
 let FIND = new_definition
   `FIND h k = htbl h (FINDLOOP h k (hfun h k))`;;
-
-let hset = new_definition
-  `hset (h:hash) p bnd = 
-    (FST h,(\q. if q = p then bnd else htbl h q),hmod h)`;;
-
-let HSET = prove
-  (`(hfun (hset (h:hash) p bnd) = hfun h) /\
-    (htbl (hset (h:hash) p bnd) =
-      \q. if q = p then bnd else htbl h q) /\
-    (hmod (hset (h:hash) p bnd) = hmod h)`,
-   SPEC_TAC (`h:hash`,`h:hash`) THEN
-   REWRITE_TAC[FORALL_PAIR_THM; HGET; hset]);;
 
 let ADD = new_definition
   `ADD h k v =
@@ -231,9 +213,18 @@ let INV = define
 
 let hempty = define `hempty f m = (f,(\x. NONE),m)`;;
 
-let NOTFULL_HMOD = prove
-  (`!h. NOTFULL h ==> ~(hmod h = 0) /\ NOTFULL h`,
-   SIMP_TAC[] THEN REWRITE_TAC[NOTFULL] THEN ARITH_TAC);;
+let NOTFULL_HFUN_LT = prove
+  (`!h k. NOTFULL h ==> hfun h k < hmod h`,
+   SIMP_TAC[FORALL_PAIR_THM; NOTFULL; hfun; hmod; MOD_LT_EQ] THEN
+   ARITH_TAC);;
+
+let HSET = prove
+  (`(hfun (hset (h:hash) p bnd) = hfun h) /\
+    (htbl (hset (h:hash) p bnd) =
+      \q. if q = p then bnd else htbl h q) /\
+    (hmod (hset (h:hash) p bnd) = hmod h)`,
+   SPEC_TAC (`h:hash`,`h:hash`) THEN
+   REWRITE_TAC[FORALL_PAIR_THM; hfun; htbl; hmod; hset]);;
 
 let CHAIN_REFL = prove
   (`!h k a. a < hmod h ==> CHAIN h k a a`,
@@ -274,16 +265,13 @@ let FINDLOOP_SPEC = prove
    let mod_lemma = MESON[MOD_EQ_SELF] `m < n ==> m MOD n = m`
    in
    DISCH_THEN (CONJUNCTS_THEN2
-     (STRIP_ASSUME_TAC o MATCH_MP NOTFULL_HMOD)
+     (STRIP_ASSUME_TAC o REWRITE_RULE[NOTFULL])
      (SUBST1_TAC o GSYM o MATCH_MP mod_lemma)) THEN
-   POP_ASSUM (STRIP_ASSUME_TAC o REWRITE_RULE[NOTFULL]) THEN
+   FIRST_ASSUM (ASSUME_TAC o MATCH_MP (ARITH_RULE`a < b ==> ~(b = 0)`)) THEN
    REWRITE_TAC[LET_DEF; LET_END_DEF] THEN
-   SPEC_TAC (`b:num`,`b:num`) THEN
-   SPEC_TAC (`a:num`,`a:num`) THEN
-   MP_TAC (SPECL[`hmod (h:hash)`;`e:num`] MODLOOP_IND) THEN
-   ASM_REWRITE_TAC[] THEN DISCH_THEN MATCH_MP_TAC THEN
-   REWRITE_TAC[CONG] THEN
-   CONJ_TAC THEN REPEAT GEN_TAC THENL
+   MAP_EVERY (fun t -> SPEC_TAC (t,t)) [`b:num`;`a:num`] THEN
+   MATCH_MP_TAC (SPECL[`hmod (h:hash)`;`e:num`] MODLOOP_IND) THEN
+   ASM_REWRITE_TAC[CONG] THEN CONJ_TAC THEN REPEAT GEN_TAC THENL
    (* base case of the modular induction; we are
       on the empty cell given by NOTFULL *)
    [DISCH_THEN SUBST1_TAC THEN
@@ -389,7 +377,7 @@ let INV_FINDLOOP = prove
 
 (* If the invariant INV holds, then any binding (k,v) in the
    hash table can be fetched using HFIND h k *)
-let INV_FIND = prove
+let INV_IN_FIND = prove
   (`!(h:hash) k v p.
       INV1 h /\ p < hmod h /\ htbl h p = SOME (k,v) ==>
       FIND h k = SOME (k,v)`,
@@ -398,6 +386,15 @@ let INV_FIND = prove
    SUBGOAL_THEN `FINDLOOP (h:hash) k (hfun h k) = p`
      (fun th -> ASM_REWRITE_TAC[th]) THEN
    ASM_MESON_TAC[INV_FINDLOOP]);;
+
+let NOTFULL_FIND_IN = prove
+  (`!(h:hash) k v.
+      NOTFULL h /\ FIND h k = SOME (k,v) ==>
+      ?p. p < hmod h /\ htbl h p = SOME (k,v)`,
+   REPEAT GEN_TAC THEN DISCH_THEN (CONJUNCTS_THEN2 ASSUME_TAC MP_TAC) THEN
+   MP_TAC (SPECL[`h:hash`;`k:K`;`hfun (h:hash) k`] FINDLOOP_SPEC) THEN
+   ASM_SIMP_TAC[FIND; NOTFULL_HFUN_LT; LET_DEF; LET_END_DEF] THEN
+   MESON_TAC[]);;
 
 let CHAIN_SET_LAST = prove
   (`!(h:hash) k a b v.
@@ -427,8 +424,7 @@ let ADD_INV = prove
      FIRST_ASSUM SUBST1_TAC THEN
      MATCH_MP_TAC CHAIN_SET_LAST THEN
      MP_TAC (SPECL[`h:hash`;`ka:K`;`(hfun (h:hash) ka)`] FINDLOOP_SPEC) THEN
-     FIRST_ASSUM (MP_TAC o MATCH_MP NOTFULL_HMOD) THEN
-     SIMP_TAC[HFUN_LT_EQ; LET_DEF; LET_END_DEF];
+     ASM_SIMP_TAC[NOTFULL_HFUN_LT; LET_DEF; LET_END_DEF];
     (* we're looking at something else *)
      POP_ASSUM (fun th -> POP_ASSUM MP_TAC THEN ASSUME_TAC th) THEN
      REWRITE_TAC[IMP_IMP] THEN
