@@ -213,6 +213,10 @@ let INV = define
 
 let hempty = define `hempty f m = (f,(\x. NONE),m)`;;
 
+let HFUN_MOD = prove
+  (`!h k. hfun h k MOD hmod h = hfun h k`,
+   REWRITE_TAC[hfun; MOD_MOD_REFL]);;
+
 let NOTFULL_HFUN_LT = prove
   (`!h k. NOTFULL h ==> hfun h k < hmod h`,
    SIMP_TAC[FORALL_PAIR_THM; NOTFULL; hfun; hmod; MOD_LT_EQ] THEN
@@ -226,11 +230,12 @@ let HSET = prove
    SPEC_TAC (`h:hash`,`h:hash`) THEN
    REWRITE_TAC[FORALL_PAIR_THM; hfun; htbl; hmod; hset]);;
 
+let LT_IMP_MOD = MESON[MOD_EQ_SELF] `m < n ==> m MOD n = m`;;
+
 let CHAIN_REFL = prove
   (`!h k a. a < hmod h ==> CHAIN h k a a`,
    REWRITE_TAC[CHAIN] THEN REPEAT GEN_TAC THEN
-   DISCH_THEN (MP_TAC o MATCH_MP
-     (MESON[MOD_EQ_SELF]`m < n ==> m MOD n = m`)) THEN
+   DISCH_THEN (MP_TAC o MATCH_MP LT_IMP_MOD) THEN
    IMP_REWRITE_TAC[MODSEG_REFL; IN_SING]);;
 
 let CHAIN_REC = prove
@@ -262,11 +267,9 @@ let FINDLOOP_SPEC = prove
       (htbl h b = NONE \/ ?v. htbl h b = SOME (k,v)) /\
       CHAIN h k a b`,
    REPEAT GEN_TAC THEN
-   let mod_lemma = MESON[MOD_EQ_SELF] `m < n ==> m MOD n = m`
-   in
    DISCH_THEN (CONJUNCTS_THEN2
      (STRIP_ASSUME_TAC o REWRITE_RULE[NOTFULL])
-     (SUBST1_TAC o GSYM o MATCH_MP mod_lemma)) THEN
+     (SUBST1_TAC o GSYM o MATCH_MP LT_IMP_MOD)) THEN
    FIRST_ASSUM (ASSUME_TAC o MATCH_MP (ARITH_RULE`a < b ==> ~(b = 0)`)) THEN
    REWRITE_TAC[LET_DEF; LET_END_DEF] THEN
    MAP_EVERY (fun t -> SPEC_TAC (t,t)) [`b:num`;`a:num`] THEN
@@ -275,7 +278,7 @@ let FINDLOOP_SPEC = prove
    (* base case of the modular induction; we are
       on the empty cell given by NOTFULL *)
    [DISCH_THEN SUBST1_TAC THEN
-    FIRST_ASSUM (SUBST1_TAC o MATCH_MP mod_lemma) THEN
+    FIRST_ASSUM (SUBST1_TAC o MATCH_MP LT_IMP_MOD) THEN
     ONCE_REWRITE_TAC[FINDLOOP] THEN ASM_REWRITE_TAC[] THEN
     MATCH_MP_TAC CHAIN_REFL THEN FIRST_ASSUM ACCEPT_TAC;
    (* harder cases, we simply know that we are not on the
@@ -343,9 +346,7 @@ let INV_FINDLOOP = prove
    REWRITE_TAC[INV; CHAIN] THEN
    DISCH_THEN (fun th -> FIRST_ASSUM (MP_TAC o MATCH_MP th)) THEN
    (* add the MOD in the findloop argument *)
-   SUBGOAL_THEN `hfun (h:hash) k = hfun h k MOD hmod h` MP_TAC THENL
-     [REWRITE_TAC[hfun; MOD_MOD_REFL]; ALL_TAC] THEN
-   DISCH_THEN (fun th -> GEN_REWRITE_TAC (RAND_CONV o DEPTH_CONV) [th]) THEN
+   GEN_REWRITE_TAC (RAND_CONV o DEPTH_CONV) [GSYM HFUN_MOD] THEN
    (* we are done crafting the invariant; we now turn to the induction *)
    SPEC_TAC (`hfun (h:hash) k`,`c:num`) THEN
    MATCH_MP_TAC (SPECL[`hmod (h:hash)`;`p:num`] MODLOOP_IND) THEN
