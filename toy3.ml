@@ -332,7 +332,7 @@ let FINDLOOP_SPEC = prove
 
 let INV_HEMPTY = prove
   (`!f m. INV1 (hempty f m:hash)`,
-   REWRITE_TAC[INV; hempty; HGET; distinctness"option"]);;
+   REWRITE_TAC[INV; hempty; htbl; distinctness"option"]);;
 
 let INV_FINDLOOP = prove
   (`!(h:hash) k v p.
@@ -344,7 +344,7 @@ let INV_FINDLOOP = prove
    DISCH_THEN (fun th -> FIRST_ASSUM (MP_TAC o MATCH_MP th)) THEN
    (* add the MOD in the findloop argument *)
    SUBGOAL_THEN `hfun (h:hash) k = hfun h k MOD hmod h` MP_TAC THENL
-     [IMP_REWRITE_TAC[MOD_LT; HFUN_LT_EQ] THEN ASM_ARITH_TAC; ALL_TAC] THEN
+     [REWRITE_TAC[hfun; MOD_MOD_REFL]; ALL_TAC] THEN
    DISCH_THEN (fun th -> GEN_REWRITE_TAC (RAND_CONV o DEPTH_CONV) [th]) THEN
    (* we are done crafting the invariant; we now turn to the induction *)
    SPEC_TAC (`hfun (h:hash) k`,`c:num`) THEN
