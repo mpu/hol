@@ -206,15 +206,15 @@ let NOT_NONE_THE = prove
 (* TODO: define binder match function and make it play nice
          with 'define' *)
 
-let FIXITER = define
-  `FIXITER Pb Pr =
-     \h ph pc.
+let FIXSTEP = define
+  `FIXSTEP Pb Pr =
+     \(h,ph,pc).
        if htbl h pc = NONE \/ pc = ph
-       then Pb h ph pc
+       then Pb (h,ph,pc)
        else let kc = (@kc. ?vc. htbl h pc = SOME (kc,vc)) in
             if ph IN MODSEG (hmod h) (hfun h kc) pc
-            then Pr (hset h ph (htbl h pc)) pc (SUC pc MOD hmod h)
-            else Pr h ph (SUC pc MOD hmod h)`;;
+            then Pr (hset h ph (htbl h pc),pc,SUC pc MOD hmod h)
+            else Pr (h,ph,SUC pc MOD hmod h)`;;
 
 let FIX = define
   `FIX h ph pc =
@@ -225,43 +225,108 @@ let FIX = define
           then FIX (hset h ph (htbl h pc)) pc (SUC pc MOD hmod h)
           else FIX h ph (SUC pc MOD hmod h)`;;
 
+let FIXPRE = define
+  `FIXPRE = \(h,ph,pc).
+     pc < hmod h /\ (?pe. pe < hmod h /\ htbl h pe = NONE /\ ~(pe = ph))`;;
+
+new_type_abbrev("fixst",`:hash#num#num`);;
+
+let HSET = prove
+  (`(hfun (hset (h:hash) p bnd) = hfun h) /\
+    (htbl (hset (h:hash) p bnd) =
+      \q. if q = p then bnd else htbl h q) /\
+    (hmod (hset (h:hash) p bnd) = hmod h)`,
+   SPEC_TAC (`h:hash`,`h:hash`) THEN
+   REWRITE_TAC[FORALL_PAIR_THM; hfun; htbl; hmod; hset]);;
+
+let FORALL_FIXST_THM = prove
+  (`!P. (!(s:fixst). P s) <=> (!h ph pc. P (h,ph,pc))`,
+   REWRITE_TAC[FORALL_PAIR_THM]);;
+
+let LAMBDA_FIXST_THM = prove
+  (`!P. (\(s:fixst). P s) = (\(h,ph,pc). P (h,ph,pc))`,
+   GEN_TAC THEN REWRITE_TAC[FUN_EQ_THM;FORALL_FIXST_THM]);;
+
+let FIX_FIXSTEP = prove
+  (`FIX h ph pc =
+    FIXSTEP (\(h,ph,pc). h,ph) (\(h,ph,pc). FIX h ph pc) (h,ph,pc)`,
+   CONV_TAC (LAND_CONV (REWR_CONV FIX)) THEN REWRITE_TAC[FIXSTEP]);;
+
+let FIXSTEP_IMP = prove
+  (`!Pb Pi Q fb fi s.
+    FIXSTEP (\s. Pb s ==> Q (fb s)) (\s. Pi s ==> Q (fi s)) s ==>
+    (FIXSTEP Pb Pi s ==> Q (FIXSTEP fb fi s))`,
+   REWRITE_TAC[FIXSTEP; FORALL_FIXST_THM] THEN
+   CONV_TAC (DEPTH_CONV let_CONV) THEN REPEAT GEN_TAC THEN
+   REPEAT (COND_CASES_TAC THEN REWRITE_TAC[]));;
+
+let FIX_PROOF = prove
+  (`!Pb Pi Q fb fi h ph pc.
+    FIXSTEP (\(h,ph,pc). Pb (h,ph,pc) ==> Q (h,ph))
+             (\(h,ph,pc). Pi (h,ph,pc) ==> Q (FIX h ph pc))
+             (h,ph,pc) ==>
+    (FIXSTEP Pb Pi (h,ph,pc) ==> Q (FIX h ph pc))`,
+   REPEAT GEN_TAC THEN STRIP_TAC THEN
+   ONCE_REWRITE_TAC[FIX_FIXSTEP] THEN
+   MATCH_MP_TAC FIXSTEP_IMP THEN
+   ASM_REWRITE_TAC[LAMBDA_FIXST_THM]);;
+
+(* A modular reasoning principle for FIX that allows to prove
+   properties in several steps. *)
 let FIX_IND = prove
-  (`!P. (!h ph pc. FIXITER (\h ph pc. T) P h ph pc ==> P h ph pc) ==>
-    !(h:hash) pe ph pc.
-      pc < hmod h /\ pe < hmod h /\ htbl h pe = NONE /\ ~(pe = ph) ==>
-      P h ph pc`,
-   REPLICATE_TAC 6 STRIP_TAC THEN DISCH_THEN ASSUME_TAC THEN
+  (`!I P.
+    (!s. FIXPRE s ==> I s) /\
+    (!s. FIXSTEP (\s. T) (\s. P s) s /\ I s ==> P s) ==>
+    !(s:fixst). FIXPRE s ==> P s`,
+   REPLICATE_TAC 3 STRIP_TAC THEN
+   REWRITE_TAC[FORALL_FIXST_THM] THEN REPEAT STRIP_TAC THEN
    SUBGOAL_THEN `pc = pc MOD hmod (h:hash)` ASSUME_TAC THENL
-   [ POP_ASSUM (MP_TAC o CONJUNCT1) THEN 
-     CONV_TAC (RAND_CONV SYM_CONV) THEN
-     SIMP_TAC[MOD_EQ_SELF];
+   [ POP_ASSUM (MP_TAC o CONJUNCT1 o REWRITE_RULE[FIXPRE]) THEN 
+     CONV_TAC (RAND_CONV SYM_CONV) THEN SIMP_TAC[MOD_EQ_SELF];
      ALL_TAC ] THEN
    POP_ASSUM (fun th -> POP_ASSUM MP_TAC THEN SUBST1_TAC th) THEN
+   REWRITE_TAC[FIXPRE; RIGHT_AND_EXISTS_THM; LEFT_IMP_EXISTS_THM] THEN
+   GEN_TAC THEN
    ABBREV_TAC `m = hmod (h:hash)` THEN POP_ASSUM MP_TAC THEN
    REWRITE_TAC[GSYM IMP_CONJ] THEN
-   MAP_EVERY (fun tm -> SPEC_TAC (tm,tm)) [`ph:num`;`h:hash`] THEN
-   POP_ASSUM MP_TAC THEN
    ASM_CASES_TAC `m = 0` THENL
-     [ FIRST_ASSUM SUBST1_TAC THEN MESON_TAC[LT]; ALL_TAC ] THEN
-   SPEC_TAC (`pc:num`,`pc:num`) THEN
+     [ FIRST_ASSUM SUBST1_TAC THEN
+       REWRITE_TAC[FIXPRE] THEN MESON_TAC[LT];
+       ALL_TAC ] THEN
+   MAP_EVERY (fun tm -> SPEC_TAC (tm,tm)) [`ph:num`;`h:hash`;`pc:num`] THEN
    MATCH_MP_TAC (SPECL[`m:num`;`pe:num`] MODLOOP_IND) THEN
-   ASM_REWRITE_TAC[CONG] THEN CONJ_TAC THENL
+   (* --- *)
+   ASM_REWRITE_TAC[CONG] THEN CONJ_TAC THEN
+   REPEAT STRIP_TAC THEN FIRST_ASSUM MATCH_MP_TAC THEN
+   CONJ_TAC THEN TRY (FIRST_ASSUM MATCH_MP_TAC THEN
+   REWRITE_TAC[FIXPRE] THEN ASM_MESON_TAC[]) THENL
    (* base case *)
-   [ REPEAT STRIP_TAC THEN
-     FIRST_ASSUM MATCH_MP_TAC THEN
-     SUBGOAL_THEN `pe MOD m = pe` ASSUME_TAC THEN
-     ASM_REWRITE_TAC[FIXITER; MOD_EQ_SELF];
+   [ SUBGOAL_THEN `pe MOD m = pe` ASSUME_TAC THEN
+     ASM_REWRITE_TAC[FIXSTEP; MOD_EQ_SELF];
    (* inductive case *)
-     REPEAT STRIP_TAC THEN
-     FIRST_ASSUM MATCH_MP_TAC THEN
-     ASM_REWRITE_TAC[FIXITER] THEN
+     ASM_REWRITE_TAC[FIXSTEP] THEN
      COND_CASES_TAC THEN
      CONV_TAC (MOD_DOWN_CONV THENC let_CONV THENC
                DEPTH_CONV COND_ELIM_CONV) THEN
      CONJ_TAC THEN DISCH_THEN (K ALL_TAC) THEN
-     FIRST_X_ASSUM (fun th ->
-       FIRST_X_ASSUM (MATCH_MP_TAC o C MATCH_MP th)) THEN
-     ASM_REWRITE_TAC[HSET; MOD_LT_EQ] THEN ASM_MESON_TAC[] ]);;
+     FIRST_X_ASSUM MATCH_MP_TAC THEN
+     ASM_REWRITE_TAC[FIXPRE; HSET; MOD_LT_EQ] THEN
+     ASM_MESON_TAC[] ]);;
+
+let FIX_INV0 = prove
+  (`!(s:fixst). FIXPRE s ==> (\(h,ph,pc).
+    ph < hmod h /\ pc < hmod h ==> SND (FIX h ph pc) < hmod h) s`,
+   MATCH_MP_TAC (SPEC `\(s:fixst). T` FIX_IND) THEN
+   SIMP_TAC[FIXPRE; FORALL_FIXST_THM; ETA_AX] THEN
+   REPEAT GEN_TAC THEN MATCH_MP_TAC FIX_PROOF THEN
+   REWRITE_TAC[FIXSTEP; HSET; LET_DEF; LET_END_DEF] THEN
+   REPEAT COND_CASES_TAC THEN SIMP_TAC[GSYM IMP_CONJ_ALT] THEN
+   DISCH_THEN (CONJUNCTS_THEN2 STRIP_ASSUME_TAC MATCH_MP_TAC) THEN
+   ASM_REWRITE_TAC[MOD_LT_EQ] THEN POP_ASSUM MP_TAC THEN ARITH_TAC);;
+
+let _ = REWRITE_RULE[LAMBDA_FIXST_THM; FIXSTEP]
+         (MATCH_MP (REWRITE_RULE[IMP_CONJ] FIX_IND) FIX_INV0);;
+let _ = REWRITE_RULE[FORALL_FIXST_THM;GSYM IMP_CONJ] FIX_INV0;;
 
 (* The FIX invariant:
    (0) Local variables are correctly bounded:
@@ -281,6 +346,10 @@ let FIX_IND = prove
 
    (3)
 *)
+
+(* --------------------------------------------------------- *)
+(* ------------------ BROKEN FROM HERE ON ------------------ *)
+(* --------------------------------------------------------- *)
 
 let NOTFULL = new_definition
   `NOTFULL h = ?e. e < hmod h /\ htbl h e = NONE`;;
@@ -314,14 +383,6 @@ let NOTFULL_HFUN_LT = prove
   (`!h k. NOTFULL h ==> hfun h k < hmod h`,
    SIMP_TAC[FORALL_PAIR_THM; NOTFULL; hfun; hmod; MOD_LT_EQ] THEN
    ARITH_TAC);;
-
-let HSET = prove
-  (`(hfun (hset (h:hash) p bnd) = hfun h) /\
-    (htbl (hset (h:hash) p bnd) =
-      \q. if q = p then bnd else htbl h q) /\
-    (hmod (hset (h:hash) p bnd) = hmod h)`,
-   SPEC_TAC (`h:hash`,`h:hash`) THEN
-   REWRITE_TAC[FORALL_PAIR_THM; hfun; htbl; hmod; hset]);;
 
 let LT_IMP_MOD = MESON[MOD_EQ_SELF] `m < n ==> m MOD n = m`;;
 
