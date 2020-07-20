@@ -193,6 +193,95 @@ let ADD = new_definition
     let p = FINDLOOP h k (hfun h k) in
     hset h p (SOME (k,v))`;;
 
+(*
+let THE = define `THE0 (SOME x) = x`;;
+
+let NOT_NONE_THE = prove
+  (`!x. ~(x = NONE) <=> x = SOME (THE0 x)`,
+   REWRITE_TAC[MESON[cases"option";distinctness"option"]
+     `~(x = NONE) <=> ?a. x = SOME a`] THEN
+   MESON_TAC[THE]);;
+*)
+
+(* TODO: define binder match function and make it play nice
+         with 'define' *)
+
+let FIXITER = define
+  `FIXITER Pb Pr =
+     \h ph pc.
+       if htbl h pc = NONE \/ pc = ph
+       then Pb h ph pc
+       else let kc = (@kc. ?vc. htbl h pc = SOME (kc,vc)) in
+            if ph IN MODSEG (hmod h) (hfun h kc) pc
+            then Pr (hset h ph (htbl h pc)) pc (SUC pc MOD hmod h)
+            else Pr h ph (SUC pc MOD hmod h)`;;
+
+let FIX = define
+  `FIX h ph pc =
+     if htbl h pc = NONE \/ pc = ph
+     then h,ph
+     else let kc = (@kc. ?vc. htbl h pc = SOME (kc,vc)) in
+          if ph IN MODSEG (hmod h) (hfun h kc) pc
+          then FIX (hset h ph (htbl h pc)) pc (SUC pc MOD hmod h)
+          else FIX h ph (SUC pc MOD hmod h)`;;
+
+let FIX_IND = prove
+  (`!P. (!h ph pc. FIXITER (\h ph pc. T) P h ph pc ==> P h ph pc) ==>
+    !(h:hash) pe ph pc.
+      pc < hmod h /\ pe < hmod h /\ htbl h pe = NONE /\ ~(pe = ph) ==>
+      P h ph pc`,
+   REPLICATE_TAC 6 STRIP_TAC THEN DISCH_THEN ASSUME_TAC THEN
+   SUBGOAL_THEN `pc = pc MOD hmod (h:hash)` ASSUME_TAC THENL
+   [ POP_ASSUM (MP_TAC o CONJUNCT1) THEN 
+     CONV_TAC (RAND_CONV SYM_CONV) THEN
+     SIMP_TAC[MOD_EQ_SELF];
+     ALL_TAC ] THEN
+   POP_ASSUM (fun th -> POP_ASSUM MP_TAC THEN SUBST1_TAC th) THEN
+   ABBREV_TAC `m = hmod (h:hash)` THEN POP_ASSUM MP_TAC THEN
+   REWRITE_TAC[GSYM IMP_CONJ] THEN
+   MAP_EVERY (fun tm -> SPEC_TAC (tm,tm)) [`ph:num`;`h:hash`] THEN
+   POP_ASSUM MP_TAC THEN
+   ASM_CASES_TAC `m = 0` THENL
+     [ FIRST_ASSUM SUBST1_TAC THEN MESON_TAC[LT]; ALL_TAC ] THEN
+   SPEC_TAC (`pc:num`,`pc:num`) THEN
+   MATCH_MP_TAC (SPECL[`m:num`;`pe:num`] MODLOOP_IND) THEN
+   ASM_REWRITE_TAC[CONG] THEN CONJ_TAC THENL
+   (* base case *)
+   [ REPEAT STRIP_TAC THEN
+     FIRST_ASSUM MATCH_MP_TAC THEN
+     SUBGOAL_THEN `pe MOD m = pe` ASSUME_TAC THEN
+     ASM_REWRITE_TAC[FIXITER; MOD_EQ_SELF];
+   (* inductive case *)
+     REPEAT STRIP_TAC THEN
+     FIRST_ASSUM MATCH_MP_TAC THEN
+     ASM_REWRITE_TAC[FIXITER] THEN
+     COND_CASES_TAC THEN
+     CONV_TAC (MOD_DOWN_CONV THENC let_CONV THENC
+               DEPTH_CONV COND_ELIM_CONV) THEN
+     CONJ_TAC THEN DISCH_THEN (K ALL_TAC) THEN
+     FIRST_X_ASSUM (fun th ->
+       FIRST_X_ASSUM (MATCH_MP_TAC o C MATCH_MP th)) THEN
+     ASM_REWRITE_TAC[HSET; MOD_LT_EQ] THEN ASM_MESON_TAC[] ]);;
+
+(* The FIX invariant:
+   (0) Local variables are correctly bounded:
+       ---
+       ph < hmod h /\ pc < hmod h
+
+   (1) MODSEG (SUC ph) (PRE pc) consists of non-empty and
+       healthy bindings:
+       ---
+       p IN MODSEG (hmod h) (SUC ph) pc /\ ~(p = pc) ==>
+         ?k v. htbl (hset h ph NONE) p = SOME (k,v) /\
+               CHAIN (hset h ph NONE) k (hfun h k) p
+
+   (2) All bindings but the one at ph are preserved:
+       ---
+       TODO
+
+   (3)
+*)
+
 let NOTFULL = new_definition
   `NOTFULL h = ?e. e < hmod h /\ htbl h e = NONE`;;
 
@@ -201,15 +290,19 @@ let CHAIN = define
     !p. p IN MODSEG (hmod h) a b /\ ~(p = b) ==>
     ?kp vp. htbl h p = SOME (kp,vp) /\ ~(kp = k)`;;
 
-(* Describes the guts of a healthy hash table; we require
-   that for any key k, value v, position p, if the table
-   has the (k,v) binding at position p, then all entries
-   from from `hfun h k` to `p - 1` are non-empty and do
-   not bind the key `k` *)
-let INV = define
-  `INV1 h = !p k v.
-    p < hmod h /\ htbl h p = SOME (k,v) ==>
-    CHAIN h k (hfun h k) p`;;
+(* The entry at position p in the table is healthy if
+   it is either empty, or if it contains a binding for
+   key k and the segment (hfun h k)--p is a chain *)
+let HEALTHY = new_definition
+  `HEALTHY8 h p =
+    !k v. htbl h p = SOME (k,v) ==> CHAIN h k (hfun h k) p`;;
+
+(* A table is healthy if all its entries are healthy;
+   this condition is the invariant preserved by all
+   operations *)
+let INV = new_definition
+  `INV1 h =
+    !p. p < hmod h ==> HEALTHY8 h p`;
 
 let hempty = define `hempty f m = (f,(\x. NONE),m)`;;
 
@@ -377,7 +470,7 @@ let INV_FINDLOOP = prove
    ]);;
 
 (* If the invariant INV holds, then any binding (k,v) in the
-   hash table can be fetched using HFIND h k *)
+   hash table can be fetched using FIND h k *)
 let INV_IN_FIND = prove
   (`!(h:hash) k v p.
       INV1 h /\ p < hmod h /\ htbl h p = SOME (k,v) ==>
@@ -396,6 +489,41 @@ let NOTFULL_FIND_IN = prove
    MP_TAC (SPECL[`h:hash`;`k:K`;`hfun (h:hash) k`] FINDLOOP_SPEC) THEN
    ASM_SIMP_TAC[FIND; NOTFULL_HFUN_LT; LET_DEF; LET_END_DEF] THEN
    MESON_TAC[]);;
+
+let SEM = new_definition
+  `SEM1 h = \k.
+    if ?v p. p < hmod h /\ htbl h p = SOME (k,v)
+    then SOME (k, @v. ?p. p < hmod h /\ htbl h p = SOME (k,v))
+    else NONE`;;
+
+(* If the hash table is not full and satisfies the invariant INV
+   its semantics corresponds with the FIND function *)
+let SEM_IS_FIND = prove
+  (`!(h:hash). NOTFULL h /\ INV1 h ==> (SEM1 h = FIND h)`,
+   REWRITE_TAC[SEM; FUN_EQ_THM] THEN
+   GEN_TAC THEN STRIP_TAC THEN X_GEN_TAC `k:K` THEN
+   COND_CASES_TAC THENL
+   [POP_ASSUM (CHOOSE_THEN (CHOOSE_THEN ASSUME_TAC)) THEN
+    MP_TAC (SPECL [`h:hash`;`k:K`;`v:V`;`p:num`] INV_IN_FIND) THEN
+    ASM_REWRITE_TAC[] THEN DISCH_THEN SUBST1_TAC THEN
+    REWRITE_TAC[injectivity"option"; PAIR_EQ] THEN
+    MATCH_MP_TAC SELECT_UNIQUE THEN X_GEN_TAC `v':V` THEN
+    EQ_TAC THENL [REWRITE_TAC[]; ASM_MESON_TAC[]] THEN
+    DISCH_THEN (CHOOSE_THEN ASSUME_TAC) THEN
+    MP_TAC (SPECL[`h:hash`;`k:K`] INV_FINDLOOP) THEN
+    ASM_REWRITE_TAC[] THEN
+    DISCH_THEN (fun th -> REPEAT (FIRST_X_ASSUM (fun asm ->
+      MP_TAC (CONJUNCT2 asm) THEN MP_TAC (MATCH_MP th asm)))) THEN
+    MAP_EVERY DISCH_THEN [SUBST1_TAC; ASSUME_TAC; SUBST1_TAC o GSYM] THEN
+    ASM_REWRITE_TAC[injectivity"option"; PAIR_EQ; EQ_SYM];
+    (* --------- *)
+    MATCH_MP_TAC EQ_SYM THEN POP_ASSUM MP_TAC THEN
+    REWRITE_TAC[NOT_EXISTS_THM; TAUT `~(A /\ B) <=> (A ==> ~B)`; FIND] THEN
+    ONCE_REWRITE_TAC[SWAP_FORALL_THM] THEN
+    DISCH_THEN (MP_TAC o SPEC `FINDLOOP (h:hash) k (hfun h k)`) THEN
+    MP_TAC (SPECL [`h:hash`;`k:K`;`hfun (h:hash) k`] FINDLOOP_SPEC) THEN
+    ASM_SIMP_TAC[NOTFULL_HFUN_LT; LET_DEF; LET_END_DEF] THEN
+    MESON_TAC[]]);;
 
 let CHAIN_SET_LAST = prove
   (`!(h:hash) k a b v.
