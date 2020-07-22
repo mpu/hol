@@ -235,19 +235,19 @@ let LAMBDA_FIXST_THM = prove
    GEN_TAC THEN REWRITE_TAC[FUN_EQ_THM;FORALL_FIXST_THM]);;
 
 let FIXINV = define
-  `FIXINV1 j i = !s. j s /\ i s ==> FIXSTEP i i s`;;
+  `FIXINV j i = !s. j s /\ i s ==> FIXSTEP i i s`;;
 
 let FIX_INV0 = prove
-  (`FIXINV1 (\s. T) (\(h,ph,pc). ph < hmod h /\ pc < hmod h)`,
+  (`FIXINV (\s. T) (\(h,ph,pc). ph < hmod h /\ pc < hmod h)`,
    REWRITE_TAC[FIXINV; FIXSTEP; FORALL_FIXST_THM] THEN
    REPEAT GEN_TAC THEN CONV_TAC (DEPTH_CONV let_CONV) THEN
    REPEAT (COND_CASES_TAC THEN SIMP_TAC[HSET]) THEN
    ASM_REWRITE_TAC[MOD_LT_EQ] THEN ARITH_TAC);;
 
 let FIXINV_CONJ = prove
-  (`!k j i. FIXINV1 k (\s. j s /\ i s) <=>
-            FIXINV1 (\s. k s /\ i s) j /\
-            FIXINV1 (\s. k s /\ j s) i`,
+  (`!k j i. FIXINV k (\s. j s /\ i s) <=>
+            FIXINV (\s. k s /\ i s) j /\
+            FIXINV (\s. k s /\ j s) i`,
    REWRITE_TAC[FIXINV] THEN REPEAT GEN_TAC THEN
    MATCH_MP_TAC (MESON[]`(!s. P s <=> Q s /\ R s) ==>
      ((!s. P s) <=> (!s. Q s) /\ (!s. R s))`) THEN
@@ -257,8 +257,8 @@ let FIXINV_CONJ = prove
    EQ_TAC THEN SIMP_TAC[]);;
 
 let FIXINV_COMPOSE = prove
-  (`!k j i. FIXINV1 k j /\ FIXINV1 j i ==>
-            FIXINV1 k (\s. j s /\ i s)`,
+  (`!k j i. FIXINV k j /\ FIXINV j i ==>
+            FIXINV k (\s. j s /\ i s)`,
    REWRITE_TAC[FIXINV_CONJ; ETA_AX] THEN
    REWRITE_TAC[FIXINV] THEN MESON_TAC[]);;
 
@@ -300,11 +300,10 @@ let FIX_INDUCT = prove
      ASM_REWRITE_TAC[HSET; MOD_LT_EQ] THEN
      ASM_MESON_TAC[] ]);;
 
-(*
 (* Uses an invariant to prove a result about FIX *)
 let FIX_PROOF = prove
   (`!I Q.
-    FIXINV1 (\s. T) I /\
+    FIXINV (\s. T) I /\
     (!s. FIXSTEP (\(h,ph,pc). I (h,ph,pc) ==> Q (h,ph)) (\s. T) s) ==>
     !(h:hash) ph pc. FIXPRE (h,ph,pc) /\ I (h,ph,pc) ==>
                      Q (FIX h ph pc)`,
@@ -316,12 +315,16 @@ let FIX_PROOF = prove
    REWRITE_TAC[FORALL_FIXST_THM] THEN REPEAT GEN_TAC THEN
    GEN_REWRITE_TAC (RAND_CONV o DEPTH_CONV) [FIX] THEN
    REWRITE_TAC[FIXSTEP] THEN CONV_TAC (DEPTH_CONV let_CONV) THEN
-   REPEAT (COND_CASES_TAC THEN REWRITE_TAC[]) THENL
+   COND_CASES_TAC THEN REWRITE_TAC[] THENL
    [ FIRST_X_ASSUM (MP_TAC o SPEC `(h,ph,pc):fixst`) THEN
      ASM_REWRITE_TAC[FIXSTEP];
+     REWRITE_TAC[COND_RAND] THEN CONV_TAC COND_ELIM_CONV THEN
+     SIMP_TAC[COND_CLAUSES] THEN CONJ_TAC THEN
      REPEAT STRIP_TAC THEN FIRST_X_ASSUM MATCH_MP_TAC THEN
-     should work easily with FIXINV assumption
-*)
+     FIRST_X_ASSUM (MP_TAC o SPEC `(h,ph,pc):fixst` o
+                    GEN_REWRITE_RULE I [FIXINV]) THEN
+     ASM_REWRITE_TAC[LAMBDA_FIXST_THM; FIXSTEP] THEN
+     CONV_TAC (LAND_CONV let_CONV) THEN ASM_REWRITE_TAC[] ]);;
 
 (* The FIX invariant:
    (0) Local variables are correctly bounded:
