@@ -193,19 +193,6 @@ let ADD = new_definition
     let p = FINDLOOP h k (hfun h k) in
     hset h p (SOME (k,v))`;;
 
-(*
-let THE = define `THE0 (SOME x) = x`;;
-
-let NOT_NONE_THE = prove
-  (`!x. ~(x = NONE) <=> x = SOME (THE0 x)`,
-   REWRITE_TAC[MESON[cases"option";distinctness"option"]
-     `~(x = NONE) <=> ?a. x = SOME a`] THEN
-   MESON_TAC[THE]);;
-*)
-
-(* TODO: define binder match function and make it play nice
-         with 'define' *)
-
 let FIXSTEP = define
   `FIXSTEP Pb Pr =
      \(h,ph,pc).
@@ -247,48 +234,50 @@ let LAMBDA_FIXST_THM = prove
   (`!P. (\(s:fixst). P s) = (\(h,ph,pc). P (h,ph,pc))`,
    GEN_TAC THEN REWRITE_TAC[FUN_EQ_THM;FORALL_FIXST_THM]);;
 
-let FIX_FIXSTEP = prove
-  (`FIX h ph pc =
-    FIXSTEP (\(h,ph,pc). h,ph) (\(h,ph,pc). FIX h ph pc) (h,ph,pc)`,
-   CONV_TAC (LAND_CONV (REWR_CONV FIX)) THEN REWRITE_TAC[FIXSTEP]);;
+let FIXINV = define
+  `FIXINV1 j i = !s. j s /\ i s ==> FIXSTEP i i s`;;
 
-let FIXSTEP_IMP = prove
-  (`!Pb Pi Q fb fi s.
-    FIXSTEP (\s. Pb s ==> Q (fb s)) (\s. Pi s ==> Q (fi s)) s ==>
-    (FIXSTEP Pb Pi s ==> Q (FIXSTEP fb fi s))`,
-   REWRITE_TAC[FIXSTEP; FORALL_FIXST_THM] THEN
+let FIX_INV0 = prove
+  (`FIXINV1 (\s. T) (\(h,ph,pc). ph < hmod h /\ pc < hmod h)`,
+   REWRITE_TAC[FIXINV; FIXSTEP; FORALL_FIXST_THM] THEN
+   REPEAT GEN_TAC THEN CONV_TAC (DEPTH_CONV let_CONV) THEN
+   REPEAT (COND_CASES_TAC THEN SIMP_TAC[HSET]) THEN
+   ASM_REWRITE_TAC[MOD_LT_EQ] THEN ARITH_TAC);;
+
+let FIXINV_CONJ = prove
+  (`!k j i. FIXINV1 k (\s. j s /\ i s) <=>
+            FIXINV1 (\s. k s /\ i s) j /\
+            FIXINV1 (\s. k s /\ j s) i`,
+   REWRITE_TAC[FIXINV] THEN REPEAT GEN_TAC THEN
+   MATCH_MP_TAC (MESON[]`(!s. P s <=> Q s /\ R s) ==>
+     ((!s. P s) <=> (!s. Q s) /\ (!s. R s))`) THEN
+   REWRITE_TAC[FORALL_FIXST_THM; FIXSTEP] THEN
    CONV_TAC (DEPTH_CONV let_CONV) THEN REPEAT GEN_TAC THEN
-   REPEAT (COND_CASES_TAC THEN REWRITE_TAC[]));;
+   REPEAT (COND_CASES_TAC THEN REWRITE_TAC[]) THEN
+   EQ_TAC THEN SIMP_TAC[]);;
 
-let FIX_PROOF = prove
-  (`!Pb Pi Q fb fi h ph pc.
-    FIXSTEP (\(h,ph,pc). Pb (h,ph,pc) ==> Q (h,ph))
-             (\(h,ph,pc). Pi (h,ph,pc) ==> Q (FIX h ph pc))
-             (h,ph,pc) ==>
-    (FIXSTEP Pb Pi (h,ph,pc) ==> Q (FIX h ph pc))`,
-   REPEAT GEN_TAC THEN STRIP_TAC THEN
-   ONCE_REWRITE_TAC[FIX_FIXSTEP] THEN
-   MATCH_MP_TAC FIXSTEP_IMP THEN
-   ASM_REWRITE_TAC[LAMBDA_FIXST_THM]);;
+let FIXINV_COMPOSE = prove
+  (`!k j i. FIXINV1 k j /\ FIXINV1 j i ==>
+            FIXINV1 k (\s. j s /\ i s)`,
+   REWRITE_TAC[FIXINV_CONJ; ETA_AX] THEN
+   REWRITE_TAC[FIXINV] THEN MESON_TAC[]);;
 
-(* A modular reasoning principle for FIX that allows to prove
-   properties in several steps. *)
-let FIX_IND = prove
-  (`!I P.
-    (!s. FIXPRE s ==> I s) /\
-    (!s. FIXSTEP (\s. T) (\s. P s) s /\ I s ==> P s) ==>
-    !(s:fixst). FIXPRE s ==> P s`,
-   REPLICATE_TAC 3 STRIP_TAC THEN
+(* In the case where there is an empty slot that is not ph
+   the FIX function terminates and can reason by induction
+   using the following theorem. *)
+let FIX_INDUCT = prove
+  (`!P. (!s. FIXSTEP (\s. T) P s ==> P s) ==>
+        !(s:fixst). FIXPRE s ==> P s`,
+   REPLICATE_TAC 2 STRIP_TAC THEN
    REWRITE_TAC[FORALL_FIXST_THM] THEN REPEAT STRIP_TAC THEN
    SUBGOAL_THEN `pc = pc MOD hmod (h:hash)` ASSUME_TAC THENL
    [ POP_ASSUM (MP_TAC o CONJUNCT1 o REWRITE_RULE[FIXPRE]) THEN 
      CONV_TAC (RAND_CONV SYM_CONV) THEN SIMP_TAC[MOD_EQ_SELF];
      ALL_TAC ] THEN
    POP_ASSUM (fun th -> POP_ASSUM MP_TAC THEN SUBST1_TAC th) THEN
-   REWRITE_TAC[FIXPRE; RIGHT_AND_EXISTS_THM; LEFT_IMP_EXISTS_THM] THEN
-   GEN_TAC THEN
-   ABBREV_TAC `m = hmod (h:hash)` THEN POP_ASSUM MP_TAC THEN
-   REWRITE_TAC[GSYM IMP_CONJ] THEN
+   ABBREV_TAC `m = hmod (h:hash)` THEN ASM_REWRITE_TAC[FIXPRE] THEN
+   REWRITE_TAC[RIGHT_AND_EXISTS_THM; LEFT_IMP_EXISTS_THM] THEN
+   GEN_TAC THEN POP_ASSUM MP_TAC THEN REWRITE_TAC[GSYM IMP_CONJ] THEN
    ASM_CASES_TAC `m = 0` THENL
      [ FIRST_ASSUM SUBST1_TAC THEN
        REWRITE_TAC[FIXPRE] THEN MESON_TAC[LT];
@@ -297,9 +286,7 @@ let FIX_IND = prove
    MATCH_MP_TAC (SPECL[`m:num`;`pe:num`] MODLOOP_IND) THEN
    (* --- *)
    ASM_REWRITE_TAC[CONG] THEN CONJ_TAC THEN
-   REPEAT STRIP_TAC THEN FIRST_ASSUM MATCH_MP_TAC THEN
-   CONJ_TAC THEN TRY (FIRST_ASSUM MATCH_MP_TAC THEN
-   REWRITE_TAC[FIXPRE] THEN ASM_MESON_TAC[]) THENL
+   REPEAT STRIP_TAC THEN FIRST_ASSUM MATCH_MP_TAC THENL
    (* base case *)
    [ SUBGOAL_THEN `pe MOD m = pe` ASSUME_TAC THEN
      ASM_REWRITE_TAC[FIXSTEP; MOD_EQ_SELF];
@@ -310,23 +297,31 @@ let FIX_IND = prove
                DEPTH_CONV COND_ELIM_CONV) THEN
      CONJ_TAC THEN DISCH_THEN (K ALL_TAC) THEN
      FIRST_X_ASSUM MATCH_MP_TAC THEN
-     ASM_REWRITE_TAC[FIXPRE; HSET; MOD_LT_EQ] THEN
+     ASM_REWRITE_TAC[HSET; MOD_LT_EQ] THEN
      ASM_MESON_TAC[] ]);;
 
-let FIX_INV0 = prove
-  (`!(s:fixst). FIXPRE s ==> (\(h,ph,pc).
-    ph < hmod h /\ pc < hmod h ==> SND (FIX h ph pc) < hmod h) s`,
-   MATCH_MP_TAC (SPEC `\(s:fixst). T` FIX_IND) THEN
-   SIMP_TAC[FIXPRE; FORALL_FIXST_THM; ETA_AX] THEN
-   REPEAT GEN_TAC THEN MATCH_MP_TAC FIX_PROOF THEN
-   REWRITE_TAC[FIXSTEP; HSET; LET_DEF; LET_END_DEF] THEN
-   REPEAT COND_CASES_TAC THEN SIMP_TAC[GSYM IMP_CONJ_ALT] THEN
-   DISCH_THEN (CONJUNCTS_THEN2 STRIP_ASSUME_TAC MATCH_MP_TAC) THEN
-   ASM_REWRITE_TAC[MOD_LT_EQ] THEN POP_ASSUM MP_TAC THEN ARITH_TAC);;
-
-let _ = REWRITE_RULE[LAMBDA_FIXST_THM; FIXSTEP]
-         (MATCH_MP (REWRITE_RULE[IMP_CONJ] FIX_IND) FIX_INV0);;
-let _ = REWRITE_RULE[FORALL_FIXST_THM;GSYM IMP_CONJ] FIX_INV0;;
+(*
+(* Uses an invariant to prove a result about FIX *)
+let FIX_PROOF = prove
+  (`!I Q.
+    FIXINV1 (\s. T) I /\
+    (!s. FIXSTEP (\(h,ph,pc). I (h,ph,pc) ==> Q (h,ph)) (\s. T) s) ==>
+    !(h:hash) ph pc. FIXPRE (h,ph,pc) /\ I (h,ph,pc) ==>
+                     Q (FIX h ph pc)`,
+   ONCE_REWRITE_TAC[GSYM (REWRITE_CONV[]
+     `(\(h:hash,ph,pc). FIX h ph pc) (h,ph,pc)`)] THEN
+   REPEAT GEN_TAC THEN STRIP_TAC THEN
+   REWRITE_TAC[GSYM FORALL_FIXST_THM; IMP_CONJ] THEN
+   MATCH_MP_TAC FIX_INDUCT THEN
+   REWRITE_TAC[FORALL_FIXST_THM] THEN REPEAT GEN_TAC THEN
+   GEN_REWRITE_TAC (RAND_CONV o DEPTH_CONV) [FIX] THEN
+   REWRITE_TAC[FIXSTEP] THEN CONV_TAC (DEPTH_CONV let_CONV) THEN
+   REPEAT (COND_CASES_TAC THEN REWRITE_TAC[]) THENL
+   [ FIRST_X_ASSUM (MP_TAC o SPEC `(h,ph,pc):fixst`) THEN
+     ASM_REWRITE_TAC[FIXSTEP];
+     REPEAT STRIP_TAC THEN FIRST_X_ASSUM MATCH_MP_TAC THEN
+     should work easily with FIXINV assumption
+*)
 
 (* The FIX invariant:
    (0) Local variables are correctly bounded:
