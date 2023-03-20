@@ -62,6 +62,7 @@ let MODSEG_rules, MODSEG_induct, MODSEG_cases = new_inductive_definition
   `(!m a b. MODSEG m a b (a MOD m)) /\
    (!m a b x. ~(a MOD m = b MOD m) /\ MODSEG m (SUC a) b x ==>
               MODSEG m a b x)`;;
+(* When m = 0, MODSEG is a..b if a <= b, and a..\infty otherwise. *)
 
 let MODSEG_REC = prove
   (`!m a b. MODSEG m a b =
@@ -74,6 +75,47 @@ let MODSEG_REC = prove
    COND_CASES_TAC THEN REWRITE_TAC[IN_SING; IN_INSERT] THEN
    REWRITE_TAC[IN]);;
 
+let LE_INDUCT_ALT = prove
+  (`!P. (!m:num. P m m) /\
+        (!m n. m <= n /\ P (SUC m) n ==> P m n)
+        ==> (!m n. m <= n ==> P m n)`,
+   GEN_TAC THEN REWRITE_TAC[IMP_CONJ; MESON[LE_EXISTS]
+     `(!m n:num. m <= n ==> R m n) <=> (!d m. R m (m + d))`] THEN
+   REPEAT DISCH_TAC THEN INDUCT_TAC THENL
+   [ ASM_REWRITE_TAC[ADD_CLAUSES];
+     GEN_TAC THEN FIRST_ASSUM MATCH_MP_TAC THEN
+     ASM_REWRITE_TAC[ARITH_RULE`x + SUC y = SUC x + y`] ]);;
+
+(*
+let MODSEG_ZERO = prove
+  (`!a b. MODSEG 0 a b = if a <= b then a..b else {x | a <= x}`,
+   REPEAT GEN_TAC THEN COND_CASES_TAC THENL
+   [ REWRITE_TAC[FUN_EQ_THM] THEN GEN_TAC THEN
+     POP_ASSUM MP_TAC THEN MAP_EVERY(fun x -> SPEC_TAC(x,x))
+       [`b:num`;`a:num`] THEN MATCH_MP_TAC LE_INDUCT_ALT THEN
+     CONJ_TAC THEN REPEAT GEN_TAC THENL
+     [ ONCE_REWRITE_TAC[MODSEG_REC] THEN REWRITE_TAC[MOD_ZERO; NUMSEG_SING];
+       GEN_REWRITE_TAC(RAND_CONV o ONCE_DEPTH_CONV) [MODSEG_REC] THEN
+       SIMP_TAC[EMPTY; INSERT_DEF; IN; MOD_ZERO; COND_RATOR] THEN
+       REWRITE_TAC[numseg; IN_ELIM_THM] THEN ARITH_TAC ];
+     REWRITE_TAC[EXTENSION; IN_ELIM_THM] THEN GEN_TAC THEN EQ_TAC THENL
+     [ ABBREV_TAC `m = 0` THEN POP_ASSUM(MP_TAC o GSYM) THEN
+       MATCH_MP_TAC(TAUT`(A ==> B ==> C) ==> (B ==> A ==> C)`) THEN
+       REWRITE_TAC[IN] THEN MAP_EVERY(fun x -> SPEC_TAC(x,x))
+         [`x:num`;`b:num`;`a:num`;`m:num`] THEN
+       MATCH_MP_TAC MODSEG_induct THEN
+       REWRITE_TAC[MOD_ZERO] THEN ARITH_TAC;
+       POP_ASSUM (MP_TAC o REWRITE_RULE[NOT_LE]) THEN
+       MATCH_MP_TAC(TAUT`(A ==> B ==> C) ==> (B ==> A ==> C)`) THEN
+       MAP_EVERY(fun x -> SPEC_TAC(x,x)) [`x:num`;`a:num`] THEN
+       MATCH_MP_TAC LE_INDUCT_ALT THEN REPEAT STRIP_TAC THEN
+        ONCE_REWRITE_TAC[MODSEG_REC] THEN REWRITE_TAC[MOD_ZERO] THENL
+       [ REWRITE_TAC[GSYM COND_RAND; IN_INSERT];
+         FIRST_ASSUM (MP_TAC o MATCH_MP LT_IMP_NE) THEN
+         SIMP_TAC[IN_INSERT] THEN ASM IMP_REWRITE_TAC [] THEN
+         ASM_ARITH_TAC ] ] ]);;
+*)
+
 let MODSEG_REFL = prove
   (`!m a b. a MOD m = b MOD m ==> MODSEG m a b = {a MOD m}`,
     ONCE_REWRITE_TAC[MODSEG_REC] THEN SIMP_TAC[]);;
@@ -81,6 +123,17 @@ let MODSEG_REFL = prove
 let LB_IN_MODSEG = prove
   (`!m a b. a MOD m IN MODSEG m a b`,
    REWRITE_TAC[IN; MODSEG_rules]);;
+
+(*
+let UB_IN_MODSEG = prove
+  (`!m a b. ~(m = 0) ==> b MOD m IN MODSEG m a b`,
+   REPEAT STRIP_TAC THEN SPEC_TAC(`a:num`,`a:num`) THEN
+   MATCH_MP_TAC(SPECL[`m:num`;`b:num`] MODLOOP_IND) THEN
+   ASM_REWRITE_TAC[CONG] THEN REPEAT CONJ_TAC THEN GEN_TAC THENL
+   [ DISCH_THEN(SUBST1_TAC o GSYM) THEN REWRITE_TAC[LB_IN_MODSEG];
+     GEN_REWRITE_TAC(RAND_CONV o ONCE_DEPTH_CONV) [MODSEG_REC] THEN
+     SIMP_TAC[IN_INSERT] ]);;
+*)
 
 let CONG_SUC = prove
   (`!m a b. SUC a MOD m = SUC b MOD m <=> a MOD m = b MOD m`,
@@ -97,7 +150,7 @@ let CONG_SUC = prove
    SUBGOAL_THEN `1 MOD m = 1` SUBST1_TAC THENL
      [REWRITE_TAC[MOD_EQ_SELF] THEN ASM_ARITH_TAC; ALL_TAC] THEN
    SUBGOAL_THEN `1 < m` MP_TAC THENL [ASM_ARITH_TAC; ALL_TAC] THEN
-   MAP_EVERY SPEC_TAC [(`a MOD m`,`A:num`);(`b MOD m`,`B:num`)] THEN
+   SPEC_TAC(`a MOD m`,`A:num`) THEN SPEC_TAC(`b MOD m`,`B:num`) THEN
    SIMP_TAC[] THEN ARITH_TAC);;
 
 let MODSEG_CONG_lemma = prove
@@ -121,11 +174,13 @@ let MODSEG_CONG = prove
 
 let MODSEG_MODR = prove
   (`!m a b. MODSEG m a (b MOD m) = MODSEG m a b`,
-   MESON_TAC[MODSEG_CONG; MOD_MOD_REFL]);;
+   REPEAT GEN_TAC THEN MATCH_MP_TAC MODSEG_CONG THEN
+   REWRITE_TAC[MOD_MOD_REFL]);;
 
 let MODSEG_MODL = prove
   (`!m a b. MODSEG m (a MOD m) b = MODSEG m a b`,
-   MESON_TAC[MODSEG_CONG; MOD_MOD_REFL]);;
+   REPEAT GEN_TAC THEN MATCH_MP_TAC MODSEG_CONG THEN
+   REWRITE_TAC[MOD_MOD_REFL]);;
 
 (* valid, but let's see if we need it
 
