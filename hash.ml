@@ -4,7 +4,7 @@ let word_int = new_definition
   `word_int (a:N word) b x = word_ule (word_sub x a) (word_sub b a)`;;
 
 let WORD_INT = prove
-  (`!(x:N word) a b. word_int x a b <=>
+  (`!(x:N word) a b. word_int a b x <=>
            (if val a <= val b
             then val a <= val x /\ val x <= val b
             else val a <= val x \/ val x <= val b)`,
